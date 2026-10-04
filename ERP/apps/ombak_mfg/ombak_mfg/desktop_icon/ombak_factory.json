@@ -1,0 +1,21 @@
+{
+ "app": "ombak_mfg",
+ "bg_color": "gray",
+ "creation": "2026-10-04 10:43:12.096587",
+ "docstatus": 0,
+ "doctype": "Desktop Icon",
+ "hidden": 0,
+ "icon": "organization",
+ "icon_type": "Link",
+ "idx": 0,
+ "label": "Ombak Factory",
+ "link_to": "Ombak Factory",
+ "link_type": "Workspace Sidebar",
+ "modified": "2026-10-04 10:43:12.096587",
+ "modified_by": "Administrator",
+ "name": "Ombak Factory",
+ "owner": "Administrator",
+ "restrict_removal": 0,
+ "roles": [],
+ "standard": 1
+}

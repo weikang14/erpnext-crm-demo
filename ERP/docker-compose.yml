@@ -1,0 +1,159 @@
+# Adapted from frappe_docker pwd.yml (ERPNext v16.37.0).
+# Local demo only: the db root password and the Administrator password are "admin".
+
+x-bench-volumes: &bench-volumes
+  - sites:/home/frappe/frappe-bench/sites
+  - logs:/home/frappe/frappe-bench/logs
+  # ponytail: bind-mount the app so code edits need a restart, not a rebuild
+  - ./apps/ombak_mfg:/home/frappe/frappe-bench/apps/ombak_mfg
+
+x-bench: &bench
+  image: ombak-erp:16
+  build: .
+  networks: [frappe_network]
+  volumes: *bench-volumes
+
+x-redis-env: &redis-env
+  FRAPPE_REDIS_CACHE: redis://redis-cache:6379
+  FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
+
+x-after-config: &after-config
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+
+services:
+  configurator:
+    <<: *bench
+    restart: "no"
+    entrypoint: [bash, -c]
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host db;
+        bench set-config -gp db_port 3306;
+        bench set-config -g redis_cache "redis://redis-cache:6379";
+        bench set-config -g redis_queue "redis://redis-queue:6379";
+        bench set-config -g redis_socketio "redis://redis-queue:6379";
+        bench set-config -gp socketio_port 9000;
+
+  create-site:
+    <<: [*bench, *after-config]
+    restart: "no"
+    entrypoint: [bash, -c]
+    command:
+      - >
+        wait-for-it -t 120 db:3306;
+        wait-for-it -t 120 redis-cache:6379;
+        wait-for-it -t 120 redis-queue:6379;
+        until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r ".redis_queue // empty"` ]]; do echo "Waiting for common_site_config.json"; sleep 5; done;
+        if [ -d "sites/localhost" ]; then echo "Site localhost already exists"; else
+        bench new-site --mariadb-user-host-login-scope='%' --admin-password=admin --db-root-username=root --db-root-password=admin --install-app erpnext --install-app ombak_mfg --set-default localhost;
+        bench --site localhost set-config host_name "http://localhost:8080";
+        fi;
+
+  backend:
+    <<: [*bench, *after-config]
+    restart: on-failure
+    # socket.io authenticates by calling back http://localhost (the Origin nginx sets) from
+    # inside the websocket container, which shares this network namespace; so gunicorn also
+    # listens on :80 here (binding a low port as non-root needs this namespace-only sysctl).
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    command:
+      - /home/frappe/frappe-bench/env/bin/gunicorn
+      - --chdir=/home/frappe/frappe-bench/sites
+      - --bind=0.0.0.0:8000
+      - --bind=0.0.0.0:80
+      - --threads=4
+      - --workers=2
+      - --worker-class=gthread
+      - --worker-tmp-dir=/dev/shm
+      - --timeout=120
+      - --preload
+      - frappe.app:application
+
+  frontend:
+    <<: *bench
+    restart: on-failure
+    command: [nginx-entrypoint.sh]
+    environment:
+      BACKEND: backend:8000
+      # site is named after the host the browser uses, or socket.io rejects the origin
+      FRAPPE_SITE_NAME_HEADER: localhost
+      SOCKETIO: backend:9000  # websocket runs in the backend's network namespace
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: 120
+      CLIENT_MAX_BODY_SIZE: 50m
+    depends_on: [backend]
+    ports:
+      - "127.0.0.1:8080:8080"  # local demo: not reachable from the LAN
+
+  websocket:
+    image: ombak-erp:16
+    volumes: *bench-volumes
+    network_mode: "service:backend"  # see backend: shares its localhost
+    depends_on: [backend]
+    restart: on-failure
+    command: [node, /home/frappe/frappe-bench/apps/frappe/socketio.js]
+    environment: *redis-env
+
+  queue-short:
+    <<: [*bench, *after-config]
+    restart: on-failure
+    command: [bench, worker, --queue, "short,default"]
+    environment: *redis-env
+
+  queue-long:
+    <<: [*bench, *after-config]
+    restart: on-failure
+    command: [bench, worker, --queue, "long,default,short"]
+    environment: *redis-env
+
+  scheduler:
+    <<: [*bench, *after-config]
+    restart: on-failure
+    command: [bench, schedule]
+
+  db:
+    image: mariadb:11.8
+    networks: [frappe_network]
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MARIADB_ROOT_PASSWORD: admin
+    volumes:
+      - db-data:/var/lib/mysql
+
+  redis-queue:
+    image: redis:6.2-alpine
+    networks: [frappe_network]
+    restart: on-failure
+    volumes:
+      - redis-queue-data:/data
+
+  redis-cache:
+    image: redis:6.2-alpine
+    networks: [frappe_network]
+    restart: on-failure
+
+volumes:
+  db-data:
+  redis-queue-data:
+  sites:
+  logs:
+
+networks:
+  frappe_network:
+    driver: bridge

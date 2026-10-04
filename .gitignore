@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+
+# >>> SpecShip root ignores >>>
+node_modules/
+dist/
+build/
+.playwright-mcp/
+*.db
+/*.png
+/*.jpeg
+.specship/artifacts/
+# <<< SpecShip root ignores <<<
+_scratch*.py
