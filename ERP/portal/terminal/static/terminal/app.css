@@ -1,0 +1,431 @@
+/* Ombak shop-floor terminal: the only stylesheet. Built for gloved fingers on a 10" tablet
+   under bright factory lights: big targets, big type, colour + text for every status. */
+
+:root {
+  /* colour */
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-muted: #475569;
+  --color-border: #cbd5e1;
+  --color-ready: #1d4ed8;
+  --color-running: #157f3d;
+  --color-paused: #b45309;
+  --color-waiting: #6b7280;
+  --color-error: #b91c1c;
+  --color-focus: #c2410c; /* >= 3:1 against the light backgrounds */
+  --color-on-strong: #ffffff; /* text on filled buttons and chips */
+  --color-input-border: #64748b; /* >= 3:1 against white for bright factory light */
+  --tint-ready: #dbeafe;
+  --tint-running: #dcfce7;
+  --tint-paused: #fef3c7;
+  --tint-waiting: #f1f5f9;
+  --tint-error: #fee2e2;
+  --tint-info: #e0f2fe;
+
+  /* type */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --text-body: 18px;
+  --text-title: 22px;
+  --text-heading: 28px;
+  --text-timer: 40px;
+
+  /* size and space */
+  --tap-primary: 64px; /* >= 15 mm: start / pause / complete */
+  --tap-min: 48px; /* every other control */
+  --gap: 12px; /* >= 8 px between touch targets */
+  --space: 16px;
+  --radius: 12px;
+  --page-max: 1200px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: var(--text-body) / 1.45 var(--font);
+}
+
+h1, h2, p {
+  margin: 0;
+}
+
+a {
+  color: var(--color-ready);
+}
+
+:focus-visible {
+  outline: 4px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* ---------- layout ---------- */
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--space);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topbar__brand {
+  font-weight: 700;
+  font-size: var(--text-title);
+  margin-right: auto;
+}
+
+.topbar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.topbar__name {
+  color: var(--color-muted);
+}
+
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: var(--space);
+}
+
+.page__title {
+  font-size: var(--text-heading);
+  margin: var(--space) 0;
+}
+
+.stack {
+  display: grid;
+  gap: var(--space);
+}
+
+/* ---------- controls ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 20px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 0.1s, transform 0.05s;
+}
+
+.btn:hover {
+  filter: brightness(0.92);
+}
+
+.btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.85);
+}
+
+.btn:focus-visible {
+  outline: 4px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: none;
+  transform: none;
+}
+
+.btn--primary,
+.btn--start,
+.btn--pause,
+.btn--complete {
+  min-height: var(--tap-primary);
+  font-size: var(--text-title);
+  color: var(--color-on-strong);
+}
+
+.btn--primary,
+.btn--start {
+  background: var(--color-ready);
+}
+
+.btn--complete {
+  background: var(--color-running);
+}
+
+.btn--pause {
+  background: var(--color-paused);
+}
+
+.btn--secondary {
+  background: var(--color-surface);
+  border-color: var(--color-input-border);
+  color: var(--color-text);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-width: 0;
+}
+
+.field input,
+.field select,
+.picker__select {
+  min-height: var(--tap-min);
+  padding: 0 12px;
+  border: 2px solid var(--color-input-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.picker {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.picker__label {
+  font-weight: 600;
+}
+
+/* ---------- feedback ---------- */
+
+.messages {
+  display: grid;
+  gap: var(--gap);
+}
+
+.banner {
+  padding: 14px var(--space);
+  border-radius: var(--radius);
+  border-left: 6px solid var(--color-ready);
+  background: var(--tint-info);
+}
+
+.banner--success {
+  border-color: var(--color-running);
+  background: var(--tint-running);
+}
+
+.banner--warning {
+  border-color: var(--color-paused);
+  background: var(--tint-paused);
+}
+
+.banner--error {
+  border-color: var(--color-error);
+  background: var(--tint-error);
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space);
+  padding: 32px var(--space);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.empty--error {
+  border-color: var(--color-error);
+  background: var(--tint-error);
+}
+
+.empty__title {
+  font-size: var(--text-title);
+}
+
+/* ---------- queue ---------- */
+
+.queue {
+  display: grid;
+  gap: var(--space);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: var(--space);
+  border: 2px solid var(--color-border);
+  border-left-width: 10px;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.card--ready { border-left-color: var(--color-ready); }
+.card--running { border-left-color: var(--color-running); background: var(--tint-running); }
+.card--paused { border-left-color: var(--color-paused); background: var(--tint-paused); }
+.card--waiting { border-left-color: var(--color-waiting); }
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+
+.card__id {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__title {
+  font-size: var(--text-title);
+}
+
+.card__qty {
+  color: var(--color-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card__meta,
+.card__waiting {
+  color: var(--color-muted);
+}
+
+.card__waiting {
+  font-weight: 600;
+}
+
+.card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-top: 8px;
+}
+
+.card__actions > * {
+  flex: 1 1 180px;
+}
+
+.card__actions .btn {
+  width: 100%;
+}
+
+.chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-on-strong);
+}
+
+.chip--ready { background: var(--color-ready); }
+.chip--running { background: var(--color-running); }
+.chip--paused { background: var(--color-paused); }
+.chip--waiting { background: var(--color-waiting); }
+
+.card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timing {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.timing--overdue { color: var(--color-error); }
+.timing--today { color: var(--color-text); }
+.timing--later { color: var(--color-muted); }
+
+.qty-big,
+.timer {
+  font-size: var(--text-timer);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-running);
+}
+
+/* ---------- complete form ---------- */
+
+.defect-row {
+  display: grid;
+  align-items: start;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); /* minmax(0, ...) lets inputs shrink on phones */
+  gap: var(--gap);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.form-actions > * {
+  flex: 1 1 200px;
+}
+
+/* ---------- sign in ---------- */
+
+.signin {
+  max-width: 420px;
+  margin: 10vh auto 0;
+  padding: var(--space);
+}
+
+.signin__title {
+  font-size: var(--text-heading);
+  margin-bottom: var(--space);
+}
+
+.panel {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+/* ---------- wider screens ---------- */
+
+@media (min-width: 900px) {
+  .queue {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+}

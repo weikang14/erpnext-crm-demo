@@ -1,4 +1,5 @@
-_scratch*.py
+**/_scratch*.py
 **/__pycache__/
 **/*.pyc
 scripts/
+portal/

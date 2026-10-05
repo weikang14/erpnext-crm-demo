@@ -1,0 +1,22 @@
+{% if card.status != "waiting" %}
+<div class="card__actions">
+  {% if card.status == "ready" %}
+  <form method="post" action="{% url 'start' card.name %}" data-busy>
+    {% csrf_token %}
+    <button type="submit" class="btn btn--start"{% if not operator %} disabled{% endif %}>Start</button>
+  </form>
+  {% elif card.status == "running" %}
+  <form method="post" action="{% url 'pause' card.name %}" data-busy>
+    {% csrf_token %}
+    <button type="submit" class="btn btn--pause">Pause</button>
+  </form>
+  <a class="btn btn--complete" href="{% url 'complete' card.name %}">Complete</a>
+  {% elif card.status == "paused" %}
+  <form method="post" action="{% url 'resume' card.name %}" data-busy>
+    {% csrf_token %}
+    <button type="submit" class="btn btn--start">Resume</button>
+  </form>
+  <a class="btn btn--complete" href="{% url 'complete' card.name %}">Complete</a>
+  {% endif %}
+</div>
+{% endif %}

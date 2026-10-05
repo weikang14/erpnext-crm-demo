@@ -52,7 +52,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-10-04 10:24:41.448862",
+ "modified": "2026-10-05 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Ombak Mfg",
  "name": "Defect Reason",
@@ -94,6 +94,10 @@
    "role": "Manufacturing User",
    "share": 1,
    "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Shop Floor Terminal"
   }
  ],
  "row_format": "Dynamic",

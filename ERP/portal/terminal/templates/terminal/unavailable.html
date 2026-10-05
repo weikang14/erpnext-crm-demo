@@ -1,0 +1,17 @@
+{% extends "terminal/shell.html" %}
+{% block title %}ERP unavailable{% endblock %}
+{% block content %}
+<section class="empty empty--error" role="alert">
+  {% if message %}
+  <h1 class="empty__title">The ERP refused this page</h1>
+  <p>{{ message }}</p>
+  {% elif saving %}
+  <h1 class="empty__title">Not sure the save went through</h1>
+  <p>The ERP stopped answering while saving. Check the job card in ERPNext before trying again.</p>
+  {% else %}
+  <h1 class="empty__title">Can't reach the ERP right now</h1>
+  <p>Nothing was changed. Check the network or tell the supervisor, then try again.</p>
+  {% endif %}
+  <a class="btn btn--primary" href="{% url 'queue' %}">Try again</a>
+</section>
+{% endblock %}

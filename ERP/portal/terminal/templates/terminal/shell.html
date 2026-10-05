@@ -1,0 +1,30 @@
+{% extends "terminal/base.html" %}
+{% load static %}
+{% block body %}
+<header class="topbar">
+  <p class="topbar__brand">Ombak Shop Floor</p>
+  {% if stations %}
+  <form method="get" action="{% url 'queue' %}" class="picker" data-autosubmit>
+    <label class="picker__label" for="station">Station</label>
+    <select id="station" name="workstation" class="picker__select">
+      {% for s in stations %}<option value="{{ s }}"{% if s == station %} selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn--secondary">Show</button>
+  </form>
+  {% endif %}
+  <div class="topbar__user">
+    <span class="topbar__name">{{ user.get_full_name|default:user.username }}</span>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn--ghost">Sign out</button>
+    </form>
+  </div>
+</header>
+<main class="page" id="main">
+  <div class="messages" aria-live="polite">
+    {% for message in messages %}<p class="banner banner--{{ message.tags|default:'info' }}"{% if message.level_tag == "error" %} role="alert"{% endif %}>{{ message }}</p>{% endfor %}
+  </div>
+  {% block content %}{% endblock %}
+</main>
+<script src="{% static 'terminal/app.js' %}" defer></script>
+{% endblock %}

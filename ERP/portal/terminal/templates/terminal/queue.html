@@ -1,0 +1,37 @@
+{% extends "terminal/shell.html" %}
+{% block title %}{{ station }}{% endblock %}
+{% block content %}
+{% if not operator %}
+<p class="banner banner--warning">This sign-in isn't linked to an ERPNext employee, so you can see jobs but not start them. Ask the supervisor.</p>
+{% endif %}
+<h1 class="page__title">{{ station }}</h1>
+{% if cards %}
+<ol class="queue" data-refresh="30">
+  {% for card in cards %}
+  <li class="card card--{{ card.status }}">
+    <div class="card__head">
+      <span class="card__chips">
+        <span class="chip chip--{{ card.status }}">{{ card.status|capfirst }}</span>
+        <span class="timing timing--{{ card.timing }}">{{ card.timing|capfirst }}</span>
+      </span>
+      <span class="card__id">{{ card.name }}</span>
+    </div>
+    <h2 class="card__title">{{ card.item_name }} <span class="card__qty">&times; {{ card.qty|floatformat:"-2" }}</span></h2>
+    <p class="card__meta">{{ card.operation }} &middot; {{ card.work_order }}</p>
+    <p class="card__meta">Planned {{ card.planned_window }}</p>
+    {% if card.status == "running" %}
+    <p class="timer" role="timer" data-elapsed="{{ card.elapsed_seconds }}">{{ card.elapsed_display }}</p>
+    {% elif card.status == "waiting" %}
+    <p class="card__waiting">Waits for {{ card.waits_for }}</p>
+    {% endif %}
+    {% include "terminal/_actions.html" %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<section class="empty">
+  <h2 class="empty__title">No jobs scheduled for {{ station }}</h2>
+  <p>Pick another station above, or check with the production planner.</p>
+</section>
+{% endif %}
+{% endblock %}

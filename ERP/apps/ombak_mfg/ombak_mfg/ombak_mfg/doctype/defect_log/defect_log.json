@@ -145,7 +145,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-10-04 10:24:42.898719",
+ "modified": "2026-10-05 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Ombak Mfg",
  "name": "Defect Log",
@@ -192,6 +192,13 @@
    "report": 1,
    "role": "Manufacturing User",
    "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "read": 1,
+   "role": "Shop Floor Terminal",
    "submit": 1,
    "write": 1
   }

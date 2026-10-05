@@ -1,0 +1,30 @@
+{% extends "terminal/shell.html" %}
+{% block title %}Complete {{ name }}{% endblock %}
+{% block content %}
+<h1 class="page__title">Complete {{ name }}</h1>
+<form method="post" class="panel stack" data-busy>
+  {% csrf_token %}
+  <div>
+    <p class="card__title">{{ job.item_name }}</p>
+    <p class="card__meta">{{ job.operation }} &middot; {{ job.work_order }}</p>
+  </div>
+  <p class="qty-big">Book {{ remaining|floatformat:"-2" }} as done</p>
+  <p class="card__meta">Any bad parts? Add them below, or leave blank.</p>
+  {% for reason, qty in form.lines %}
+  <div class="defect-row">
+    <label class="field">{{ reason.label }}
+      {{ reason }}
+      {% if reason.errors %}<span class="banner banner--error" id="{{ reason.auto_id }}_error">{{ reason.errors|join:" " }}</span>{% endif %}
+    </label>
+    <label class="field">{{ qty.label }}
+      {{ qty }}
+      {% if qty.errors %}<span class="banner banner--error" id="{{ qty.auto_id }}_error">{{ qty.errors|join:" " }}</span>{% endif %}
+    </label>
+  </div>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit" class="btn btn--complete">Confirm complete</button>
+    <a class="btn btn--secondary" href="{% url 'queue' %}">Back</a>
+  </div>
+</form>
+{% endblock %}

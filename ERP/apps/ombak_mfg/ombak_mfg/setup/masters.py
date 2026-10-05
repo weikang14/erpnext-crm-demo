@@ -114,6 +114,26 @@ DEFECT_REASONS = {
 	"MAT-DEF": ("Material", "Material defect: rust pitting or lamination"),
 }
 
+# shop-floor terminal (ERP/portal): one operator per workstation; each time log is booked to them
+OPERATORS = {
+	"Laser Cutting": ("Ahmad", "Faizal", "Male", "1992-03-14"),
+	"CNC Press Brake": ("Mei Ling", "Tan", "Female", "1995-08-02"),
+	"Welding Bay": ("Rajesh", "Kumar", "Male", "1988-11-21"),
+	"Powder Coating": ("Nurul", "Aina", "Female", "1997-01-30"),
+}
+INTEGRATION_USER = "shopfloor.terminal@ombakmetal.example"
+# least privilege for the terminal's API user: only what start/pause/resume/complete/defects need
+# (Defect Log and Defect Reason grant this role in their own DocType JSON)
+TERMINAL_ROLE = "Shop Floor Terminal"
+TERMINAL_PERMISSIONS = {
+	"Job Card": ("read", "write", "submit"),
+	"Workstation": ("read",),
+	"Employee": ("read",),
+	# submitting a job card saves its (already submitted) work order's progress as this user, and
+	# Frappe checks "submit" for any update to a submitted document; still no create or cancel
+	"Work Order": ("read", "write", "submit"),
+}
+
 USERS = {
 	"lim.weijie@ombakmetal.example": (
 		"Lim Wei Jie",
@@ -138,6 +158,9 @@ def setup_masters():
 	_transport()
 	_users()
 	_defect_reasons()
+	_operators()
+	_terminal_role()
+	_integration_user()
 	frappe.db.commit()
 
 
@@ -446,3 +469,59 @@ def _defect_reasons():
 		_ensure(
 			"Defect Reason", code, {"reason_code": code, "category": category, "description": description}
 		)
+
+
+def _operators():
+	for first, last, gender, born in OPERATORS.values():
+		if not frappe.db.exists("Employee", {"first_name": first, "last_name": last, "company": COMPANY}):
+			frappe.get_doc(
+				{
+					"doctype": "Employee",
+					"first_name": first,
+					"last_name": last,
+					"gender": gender,
+					"date_of_birth": born,
+					"date_of_joining": "2021-01-04",
+					"company": COMPANY,
+					"status": "Active",
+				}
+			).insert(ignore_permissions=True)
+
+
+def _terminal_role():
+	from frappe.permissions import add_permission, update_permission_property
+
+	_ensure("Role", TERMINAL_ROLE, {"role_name": TERMINAL_ROLE, "desk_access": 1})
+	for doctype, ptypes in TERMINAL_PERMISSIONS.items():
+		if not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": TERMINAL_ROLE, "permlevel": 0}):
+			add_permission(doctype, TERMINAL_ROLE, 0)
+		for ptype in ptypes:
+			update_permission_property(doctype, TERMINAL_ROLE, 0, ptype, 1)
+
+
+def _integration_user():
+	"""API user for the shop-floor terminal. Key and secret come from site config so they
+	are never committed: bench --site <site> set-config shopfloor_api_key/shopfloor_api_secret."""
+	if not frappe.db.exists("User", INTEGRATION_USER):
+		user = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": INTEGRATION_USER,
+				"first_name": "Shop Floor Terminal",
+				"send_welcome_email": 0,
+			}
+		)
+		user.append_roles(TERMINAL_ROLE)
+		user.insert(ignore_permissions=True)
+	user = frappe.get_doc("User", INTEGRATION_USER)
+	if "Manufacturing User" in frappe.get_roles(INTEGRATION_USER):  # sites set up before the narrow role
+		user.remove_roles("Manufacturing User")
+	if TERMINAL_ROLE not in frappe.get_roles(INTEGRATION_USER):
+		user.add_roles(TERMINAL_ROLE)
+
+	key, secret = frappe.conf.get("shopfloor_api_key"), frappe.conf.get("shopfloor_api_secret")
+	if key and secret:
+		user = frappe.get_doc("User", INTEGRATION_USER)
+		user.api_key = key
+		user.api_secret = secret
+		user.save(ignore_permissions=True)

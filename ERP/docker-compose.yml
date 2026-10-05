@@ -51,6 +51,11 @@ services:
         bench new-site --mariadb-user-host-login-scope='%' --admin-password=admin --db-root-username=root --db-root-password=admin --install-app erpnext --install-app ombak_mfg --set-default localhost;
         bench --site localhost set-config host_name "http://localhost:8080";
         fi;
+        bench --site localhost set-config shopfloor_api_key "$$SHOPFLOOR_API_KEY";
+        bench --site localhost set-config shopfloor_api_secret "$$SHOPFLOOR_API_SECRET";
+    environment:
+      SHOPFLOOR_API_KEY: ${SHOPFLOOR_API_KEY:-shopfloor-demo-key}
+      SHOPFLOOR_API_SECRET: ${SHOPFLOOR_API_SECRET:-shopfloor-demo-secret}
 
   backend:
     <<: [*bench, *after-config]
@@ -87,7 +92,10 @@ services:
       UPSTREAM_REAL_IP_RECURSIVE: "off"
       PROXY_READ_TIMEOUT: 120
       CLIENT_MAX_BODY_SIZE: 50m
-    depends_on: [backend]
+    depends_on:
+      backend:
+        condition: service_started
+        restart: true  # nginx resolves backend's IP once; follow backend restarts
     ports:
       - "127.0.0.1:8080:8080"  # local demo: not reachable from the LAN
 
@@ -96,7 +104,8 @@ services:
     volumes: *bench-volumes
     network_mode: "service:backend"  # see backend: shares its localhost
     depends_on: [backend]
-    restart: on-failure
+    # unless-stopped, not on-failure: when backend restarts this container must rejoin its network
+    restart: unless-stopped
     command: [node, /home/frappe/frappe-bench/apps/frappe/socketio.js]
     environment: *redis-env
 
@@ -116,6 +125,26 @@ services:
     <<: [*bench, *after-config]
     restart: on-failure
     command: [bench, schedule]
+
+  # Django shop-floor terminal (ERP/portal): talks to ERPNext only through its REST API
+  portal:
+    build: ./portal
+    image: ombak-portal:1
+    restart: on-failure
+    networks: [frappe_network]
+    depends_on: [backend]
+    environment:
+      DJANGO_SECRET_KEY: ${PORTAL_SECRET_KEY:-local-demo-only-not-secret}
+      ERPNEXT_URL: http://backend:8000
+      ERPNEXT_SITE: localhost
+      ERPNEXT_API_KEY: ${SHOPFLOOR_API_KEY:-shopfloor-demo-key}
+      ERPNEXT_API_SECRET: ${SHOPFLOOR_API_SECRET:-shopfloor-demo-secret}
+      SQLITE_PATH: /data/portal.sqlite3
+    volumes:
+      - ./portal:/app  # dev: code edits need a restart, not a rebuild
+      - portal-data:/data
+    ports:
+      - "127.0.0.1:8081:8000"
 
   db:
     image: mariadb:11.8
@@ -149,6 +178,7 @@ services:
     restart: on-failure
 
 volumes:
+  portal-data:
   db-data:
   redis-queue-data:
   sites:

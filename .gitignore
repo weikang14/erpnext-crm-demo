@@ -15,3 +15,10 @@ build/
 .specship/artifacts/
 # <<< SpecShip root ignores <<<
 _scratch*.py
+*.sqlite3
+staticfiles/
+ERP/scripts/ui-probe/node_modules/
+ERP/scripts/ui-probe/sid.txt
+ERP/scripts/ui-probe/*.png
+ERP/scripts/ui-probe/lighthouse-*.json
+ERP/scripts/ui-probe/package-lock.json

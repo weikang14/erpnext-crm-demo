@@ -3,7 +3,7 @@ from frappe.tests import IntegrationTestCase
 
 from ombak_mfg.tests.factory import completed_job_card, job_cards, make_work_order
 
-MFG_ROLES = {"System Manager", "Manufacturing Manager", "Manufacturing User"}
+MFG_ROLES = {"System Manager", "Manufacturing Manager", "Manufacturing User", "Shop Floor Terminal"}
 
 
 def make_reason(code="TEST-BURR"):
