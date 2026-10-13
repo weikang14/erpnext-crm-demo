@@ -1,0 +1,43 @@
+<section class="panel" aria-labelledby="activities-heading">
+  <div class="panelhead"><h2 id="activities-heading">Activities</h2></div>
+  {% if activities %}
+  <ul class="items">
+    {% for a in activities %}
+    <li>
+      <div class="what">
+        <span class="chip">{{ a.get_kind_display }}</span> <strong>{{ a.subject }}</strong>
+        <div class="meta">
+          {% if a.done %}Done {{ a.done_at|date:"j M Y, H:i" }}{% else %}{% if a.due_date < today %}<span class="ind ind-overdue">Overdue</span> {% elif a.due_date == today %}<span class="ind ind-today">Today</span> {% endif %}Due {{ a.due_date|date:"D j M" }}{% endif %}
+          · {{ a.owner.get_full_name|default:a.owner.username }}
+          {% if show_parent and a.opportunity %} · <a href="{% url 'opportunity' a.opportunity_id %}">{{ a.opportunity.title }}</a>{% endif %}
+        </div>
+        {% if a.notes %}<p class="small">{{ a.notes|linebreaksbr }}</p>{% endif %}
+      </div>
+      {% if not a.done %}
+      <form method="post" action="{% url 'activity_done' a.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ parent.get_absolute_url }}">
+        <button class="btn btn-small" type="submit">Mark done<span class="visually-hidden">: {{ a.subject }}</span></button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty"><strong>No activities yet</strong>{% if can_add %}Log a call or plan the next step below.{% endif %}</div>
+  {% endif %}
+  {% if can_add %}
+  <details class="addform"{% if activity_form.errors %} open{% endif %}>
+    <summary class="btn">Log or plan an activity</summary>
+    <form method="post" action="{% url 'activity_add' parent_type parent.pk %}" class="formgrid">
+      {% csrf_token %}
+      {% include "sales/_field.html" with field=activity_form.kind %}
+      {% include "sales/_field.html" with field=activity_form.subject %}
+      {% include "sales/_field.html" with field=activity_form.due_date %}
+      {% include "sales/_field.html" with field=activity_form.done %}
+      <div class="wide">{% include "sales/_field.html" with field=activity_form.notes %}</div>
+      <div class="form-actions wide"><button class="btn btn-primary" type="submit">Save activity</button></div>
+    </form>
+  </details>
+  {% endif %}
+</section>

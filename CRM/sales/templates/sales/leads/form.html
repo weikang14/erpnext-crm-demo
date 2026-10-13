@@ -1,0 +1,21 @@
+{% extends "sales/base.html" %}
+{% block title %}{% if lead %}Edit {{ form.initial.company }}{% else %}New lead{% endif %}{% endblock %}
+{% block content %}
+{% if lead %}
+<div class="pagehead"><div><p class="crumbs"><a href="{% url 'leads' %}">Leads</a> / <a href="{% url 'lead' lead.pk %}">{{ form.initial.company }}</a></p><h1>Edit lead</h1><p class="sub">The region comes from the state; the owner does not change.</p></div></div>
+{% else %}
+<div class="pagehead"><div><h1>New lead</h1><p class="sub">The region comes from the state; {% if is_manager %}leave the owner empty to assign by region.{% else %}you will own this lead.{% endif %}</p></div></div>
+{% endif %}
+<section class="panel">
+  <form method="post" class="formgrid" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+    <div{% if field.name == "notes" or field.name == "interest" %} class="wide"{% endif %}>{% include "sales/_field.html" %}</div>
+    {% endfor %}
+    <div class="form-actions wide">
+      <button class="btn btn-primary" type="submit">Save lead</button>
+      <a class="btn btn-quiet" href="{% if lead %}{% url 'lead' lead.pk %}{% else %}{% url 'leads' %}{% endif %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

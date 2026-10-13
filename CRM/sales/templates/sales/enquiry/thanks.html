@@ -1,0 +1,10 @@
+{% extends "sales/base.html" %}
+{% block title %}Thank you{% endblock %}
+{% block content %}
+<section class="public panel">
+  <p class="public-brand">Ombak Metal Works</p>
+  <h1>Thank you</h1>
+  <p>We have your enquiry. The sales engineer for your area will contact you within one working day.</p>
+  <a class="btn" href="{% url 'enquiry' %}">Send another enquiry</a>
+</section>
+{% endblock %}

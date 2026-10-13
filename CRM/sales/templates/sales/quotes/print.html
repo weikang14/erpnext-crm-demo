@@ -1,0 +1,73 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ quote.number }} · {{ company.name }}</title>
+  <link rel="icon" href="{% static 'sales/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'sales/app.css' %}">
+  <script src="{% static 'sales/app.js' %}" defer></script>
+</head>
+<body class="printpage">
+  <div class="printbar">
+    <a class="btn" href="{% url 'quote' quote.pk %}">Back to the quote</a>
+    <button class="btn btn-primary" type="button" data-print>Print or save as PDF</button>
+  </div>
+  <main class="sheet">
+    <header class="sheet-head">
+      <div>
+        <p class="sheet-company">{{ company.name }}</p>
+        <p>{{ company.address }}</p>
+        <p>{{ company.phone }} · {{ company.email }}</p>
+      </div>
+      <div class="sheet-title">
+        <h1>Quotation</h1>
+        <dl class="details">
+          <dt>No.</dt><dd>{{ quote.number }}</dd>
+          <dt>Date</dt><dd>{{ quote.created_at|date:"j M Y" }}</dd>
+          <dt>Valid until</dt><dd>{{ quote.valid_until|date:"j M Y" }}</dd>
+          {% if quote.status == "superseded" %}<dt>Status</dt><dd>Superseded by a later quote</dd>{% endif %}
+        </dl>
+      </div>
+    </header>
+
+    <section class="sheet-to" aria-label="Customer">
+      <p class="muted">Quotation for</p>
+      <p><strong>{{ deal.account.name }}</strong></p>
+      {% if deal.account.address %}<p>{{ deal.account.address }}</p>{% endif %}
+      <p>{{ deal.account.postcode }} {{ deal.account.city }}{% if deal.account.city %}, {% endif %}{{ deal.account.state }}, {{ deal.account.country }}</p>
+      {% if deal.contact %}<p>Attn: {{ deal.contact.name }}{% if deal.contact.job_title %}, {{ deal.contact.job_title }}{% endif %}</p>{% endif %}
+      <p>Re: {{ deal.title }}</p>
+    </section>
+
+    <div class="tablewrap sheet-lines">
+    <table class="table">
+      <thead><tr><th scope="col">#</th><th scope="col">Item</th><th scope="col" class="num">Qty</th><th scope="col" class="num">Unit price (MYR)</th><th scope="col" class="num">Discount</th><th scope="col" class="num">Amount (MYR)</th></tr></thead>
+      <tbody>
+        {% for line in lines %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td><strong>{{ line.product.item_code }}</strong><br>{{ line.product.name }}</td>
+          <td class="num">{{ line.qty|floatformat:"-2g" }} {{ line.product.uom }}</td>
+          <td class="num">{{ line.unit_price|floatformat:"2g" }}</td>
+          <td class="num">{% if line.discount_pct %}{{ line.discount_pct|floatformat:"-2" }} %{% else %}-{% endif %}</td>
+          <td class="num">{{ line.total|floatformat:"2g" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="5">Total (MYR), excluding SST</td><td class="num">{{ total|floatformat:"2g" }}</td></tr></tfoot>
+    </table>
+    </div>
+
+    <section class="sheet-terms">
+      <h2>Terms</h2>
+      <ol>
+        <li>Prices are in Malaysian Ringgit and exclude Sales and Service Tax, which is added on the invoice where it applies.</li>
+        <li>Delivery ex-works Senai, Johor. Lead time is confirmed with the purchase order.</li>
+        <li>This quotation is valid until {{ quote.valid_until|date:"j F Y" }}.</li>
+      </ol>
+      <p class="sheet-sign">Prepared by {{ deal.owner.get_full_name|default:deal.owner.username }}, {{ company.name }}</p>
+    </section>
+  </main>
+</body>
+</html>

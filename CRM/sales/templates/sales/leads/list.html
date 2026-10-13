@@ -1,0 +1,44 @@
+{% extends "sales/base.html" %}
+{% block title %}Leads{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div><h1>Leads</h1><p class="sub">Enquiries not yet qualified into deals.</p></div>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'lead_new' %}">New lead</a></div>
+</div>
+
+<form class="filters panel" method="get" role="search" aria-label="Filter leads">
+  {% include "sales/_field.html" with field=filters.status %}
+  {% if filters.owner %}{% include "sales/_field.html" with field=filters.owner %}{% endif %}
+  {% include "sales/_field.html" with field=filters.region %}
+  <div class="field-search">{% include "sales/_field.html" with field=filters.q %}</div>
+  <div class="actions"><button class="btn" type="submit">Filter</button>{% if filters.narrowed %}<a class="btn btn-quiet" href="{% url 'leads' %}">Clear</a>{% endif %}</div>
+</form>
+
+<section class="panel">
+  {% if page.object_list %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th scope="col">Company</th><th scope="col">Contact</th><th scope="col">Region</th><th scope="col">Source</th><th scope="col">Owner</th><th scope="col">Status</th><th scope="col">Received</th></tr></thead>
+      <tbody>
+        {% for lead in page.object_list %}
+        <tr>
+          <td><a href="{% url 'lead' lead.pk %}">{{ lead.company }}</a></td>
+          <td>{{ lead.contact_name }}<div class="muted">{{ lead.email|default:lead.phone }}</div></td>
+          <td>{{ lead.region.label }}<div class="muted">{{ lead.state }}</div></td>
+          <td>{{ lead.get_source_display }}</td>
+          <td>{% if lead.owner %}{{ lead.owner.get_full_name|default:lead.owner.username }}{% else %}<span class="chip chip-amber">Unassigned</span>{% endif %}</td>
+          <td><span class="chip{% if lead.status == 'new' %} chip-blue{% elif lead.status == 'converted' %} chip-green{% elif lead.status == 'disqualified' %} chip-red{% endif %}">{{ lead.get_status_display }}</span></td>
+          <td class="num">{{ lead.created_at|date:"j M Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "sales/_pager.html" %}
+  {% elif filters.narrowed %}
+  <div class="empty"><strong>No leads match</strong>Try another status, region or search. <a href="{% url 'leads' %}">Clear the filters</a></div>
+  {% else %}
+  <div class="empty"><strong>No leads yet</strong>Web enquiries land here automatically, or <a href="{% url 'lead_new' %}">add one yourself</a>.</div>
+  {% endif %}
+</section>
+{% endblock %}

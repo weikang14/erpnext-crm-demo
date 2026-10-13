@@ -1,0 +1,79 @@
+{% extends "sales/base.html" %}
+{% block title %}{{ lead.company }}{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <p class="crumbs"><a href="{% url 'leads' %}">Leads</a></p>
+    <h1>{{ lead.company }}</h1>
+    <p class="sub"><span class="chip{% if lead.status == 'new' %} chip-blue{% elif lead.status == 'converted' %} chip-green{% elif lead.status == 'disqualified' %} chip-red{% endif %}">{{ lead.get_status_display }}</span> {{ lead.get_source_display }} · received {{ lead.created_at|date:"j M Y, H:i" }}</p>
+  </div>
+  {% if lead.opportunity %}<div class="actions"><a class="btn btn-primary" href="{% url 'opportunity' lead.opportunity_id %}">Open the deal</a></div>{% endif %}
+</div>
+
+{% if duplicates %}
+<section class="msg msg-warning dupes" role="status" aria-labelledby="dupes-heading">
+  <h2 id="dupes-heading" class="h3">Possible duplicates</h2>
+  <ul>
+    {% for account in duplicates.accounts %}<li>Account <a href="{% url 'account' account.pk %}">{{ account.name }}</a> already exists.</li>{% endfor %}
+    {% for contact in duplicates.contacts %}<li>Contact {{ contact.name }} at <a href="{% url 'account' contact.account_id %}">{{ contact.account.name }}</a> has the same email.</li>{% endfor %}
+    {% for other in duplicates.leads %}<li>Open lead <a href="{% url 'lead' other.pk %}">{{ other.company }}</a> has the same email.</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<div class="grid grid-2">
+  <div>
+    <section class="panel" aria-labelledby="lead-heading">
+      <div class="panelhead">
+        <h2 id="lead-heading">Details</h2>
+        {% if lead.is_open %}<a class="btn" href="{% url 'lead_edit' lead.pk %}">Edit<span class="visually-hidden"> lead details</span></a>{% endif %}
+      </div>
+      <dl class="details">
+        <dt>Contact</dt><dd>{{ lead.contact_name }}</dd>
+        <dt>Email</dt><dd>{% if lead.email %}<a href="mailto:{{ lead.email }}">{{ lead.email }}</a>{% else %}<span class="muted">none</span>{% endif %}</dd>
+        <dt>Phone</dt><dd>{{ lead.phone|default:"none" }}</dd>
+        <dt>Region</dt><dd>{{ lead.region.label }} ({{ lead.state }})</dd>
+        <dt>Owner</dt><dd>{% if lead.owner %}{{ lead.owner.get_full_name|default:lead.owner.username }}{% else %}<span class="chip chip-amber">Unassigned</span>{% endif %}</dd>
+        <dt>Interest</dt><dd>{{ lead.interest|default:"not given" }}</dd>
+        {% if lead.notes %}<dt>Notes</dt><dd>{{ lead.notes|linebreaksbr }}</dd>{% endif %}
+        {% if lead.disqualify_reason %}<dt>Disqualified</dt><dd>{{ lead.disqualify_reason }}</dd>{% endif %}
+      </dl>
+    </section>
+    {% include "sales/_activities.html" with parent_type="lead" parent=lead can_add=lead.is_open %}
+  </div>
+
+  <div>
+    {% if convert_form %}
+    <section class="panel" aria-labelledby="convert-heading">
+      <h2 id="convert-heading">Convert to a deal</h2>
+      <p class="muted small">Creates the contact and a deal in Enquiry, owned by {{ lead.owner.get_full_name|default:"you" }}.</p>
+      <form method="post" action="{% url 'lead_convert' lead.pk %}" novalidate>
+        {% csrf_token %}
+        {% for field in convert_form %}{% include "sales/_field.html" %}{% endfor %}
+        <button class="btn btn-success btn-block" type="submit">Convert to deal</button>
+      </form>
+    </section>
+    {% endif %}
+    {% if assign_form %}
+    <section class="panel" aria-labelledby="assign-heading">
+      <h2 id="assign-heading">Reassign</h2>
+      <form method="post" action="{% url 'lead_assign' lead.pk %}">
+        {% csrf_token %}
+        {% include "sales/_field.html" with field=assign_form.owner %}
+        <button class="btn btn-block" type="submit">Assign</button>
+      </form>
+    </section>
+    {% endif %}
+    {% if reason_form %}
+    <section class="panel" aria-labelledby="disq-heading">
+      <h2 id="disq-heading">Not a fit?</h2>
+      <form method="post" action="{% url 'lead_disqualify' lead.pk %}" novalidate>
+        {% csrf_token %}
+        {% include "sales/_field.html" with field=reason_form.reason %}
+        <button class="btn btn-danger btn-block" type="submit">Disqualify lead</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

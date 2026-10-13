@@ -1,0 +1,103 @@
+{% extends "sales/base.html" %}
+{% block title %}My day{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>My day</h1>
+    <p class="sub">{{ today|date:"l, j F Y" }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'lead_new' %}">New lead</a>
+    <a class="btn btn-primary" href="{% url 'pipeline' %}">Open pipeline</a>
+  </div>
+</div>
+
+<section class="stats" aria-label="{% if is_manager %}Team{% else %}My{% endif %} numbers">
+  <div class="stat"><span class="stat-label">{% if is_manager %}Team{% else %}My{% endif %} open pipeline</span><span class="stat-value">MYR {{ open_value|floatformat:"2g" }}</span></div>
+  <div class="stat"><span class="stat-label">Weighted</span><span class="stat-value">MYR {{ weighted_value|floatformat:"2g" }}</span></div>
+  <div class="stat"><span class="stat-label">Closing this month</span><span class="stat-value">{{ closing_this_month|length }} deal{{ closing_this_month|length|pluralize }}</span></div>
+  <div class="stat"><span class="stat-label">Won this month</span><span class="stat-value">MYR {{ won_this_month|floatformat:"2g" }}</span></div>
+</section>
+
+{% if is_manager %}
+<div class="grid grid-halves">
+  <section class="panel" aria-labelledby="approvals-heading">
+    <div class="panelhead"><h2 id="approvals-heading">Quotes waiting for you</h2><a href="{% url 'approvals' %}">All approvals</a></div>
+    {% if pending_quotes %}
+    <ul class="items">
+      {% for q in pending_quotes %}
+      <li><div class="what"><a href="{% url 'quote' q.pk %}"><strong>{{ q.number }}</strong></a> · {{ q.opportunity.account.name }}<div class="meta">{{ q.opportunity.owner.get_full_name }} · {{ q.opportunity.title }}</div></div></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Nothing to approve</strong>Quotes with a discount above 10 % show up here.</div>
+    {% endif %}
+  </section>
+  <section class="panel" aria-labelledby="unassigned-heading">
+    <div class="panelhead"><h2 id="unassigned-heading">Unassigned leads</h2><a href="{% url 'leads' %}?owner=none">See all</a></div>
+    {% if unassigned %}
+    <ul class="items">
+      {% for lead in unassigned %}
+      <li><div class="what"><a href="{% url 'lead' lead.pk %}"><strong>{{ lead.company }}</strong></a><div class="meta">{{ lead.get_source_display }} · {{ lead.state }}</div></div></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Every lead has an owner</strong>Leads from regions without an active rep land here.</div>
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+
+<div class="grid grid-halves">
+  <section class="panel" aria-labelledby="todo-heading">
+    <div class="panelhead"><h2 id="todo-heading">To do</h2></div>
+    {% if overdue or due_today %}
+    <ul class="items">
+      {% for a in overdue %}{% include "sales/_todo.html" with state="overdue" %}{% endfor %}
+      {% for a in due_today %}{% include "sales/_todo.html" with state="today" %}{% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>All clear</strong>Nothing overdue and nothing due today.</div>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="leads-heading">
+    <div class="panelhead"><h2 id="leads-heading">New leads to contact</h2><a href="{% url 'leads' %}">All leads</a></div>
+    {% if new_leads %}
+    <ul class="items">
+      {% for lead in new_leads %}
+      <li><div class="what"><a href="{% url 'lead' lead.pk %}"><strong>{{ lead.company }}</strong></a><div class="meta">{{ lead.contact_name }} · {{ lead.get_source_display }} · {{ lead.created_at|timesince }} ago</div></div></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>No new leads</strong>New enquiries for your region appear here.</div>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="next-heading">
+    <div class="panelhead"><h2 id="next-heading">{% if is_manager %}Team deals{% else %}Deals{% endif %} with no next step</h2></div>
+    {% if no_next_step %}
+    <ul class="items">
+      {% for deal in no_next_step %}
+      <li><div class="what"><a href="{% url 'opportunity' deal.pk %}"><strong>{{ deal.title }}</strong></a><div class="meta">{{ deal.account.name }} · {{ deal.get_stage_display }}{% if is_manager %} · {{ deal.owner.get_full_name|default:deal.owner.username }}{% endif %}</div></div><span class="ind ind-none">Plan an activity</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Every deal has a next step</strong></div>
+    {% endif %}
+  </section>
+
+  <section class="panel" aria-labelledby="stale-heading">
+    <div class="panelhead"><h2 id="stale-heading">{% if is_manager %}Team deals going stale{% else %}Going stale{% endif %}</h2></div>
+    {% if stale %}
+    <ul class="items">
+      {% for deal in stale %}
+      <li><div class="what"><a href="{% url 'opportunity' deal.pk %}"><strong>{{ deal.title }}</strong></a><div class="meta">{{ deal.account.name }} · last touched {{ deal.last_activity_at|timesince }} ago{% if is_manager %} · {{ deal.owner.get_full_name|default:deal.owner.username }}{% endif %}</div></div><span class="chip chip-amber">Stale</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Nothing stale</strong>Deals untouched for 14 days show up here.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

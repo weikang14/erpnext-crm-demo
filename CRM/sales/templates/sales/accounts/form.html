@@ -1,0 +1,17 @@
+{% extends "sales/base.html" %}
+{% block title %}{% if account %}Edit {{ form.initial.name }}{% else %}New account{% endif %}{% endblock %}
+{% block content %}
+<div class="pagehead"><div><p class="crumbs"><a href="{% url 'accounts' %}">Accounts</a>{% if account %} / <a href="{% url 'account' account.pk %}">{{ form.initial.name }}</a>{% endif %}</p><h1>{% if account %}Edit account{% else %}New account{% endif %}</h1></div></div>
+<section class="panel">
+  <form method="post" class="formgrid" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+    <div{% if field.name == "address" %} class="wide"{% endif %}>{% include "sales/_field.html" %}</div>
+    {% endfor %}
+    <div class="form-actions wide">
+      <button class="btn btn-primary" type="submit">Save account</button>
+      <a class="btn btn-quiet" href="{% if account %}{% url 'account' account.pk %}{% else %}{% url 'accounts' %}{% endif %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

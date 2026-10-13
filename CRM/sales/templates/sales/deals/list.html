@@ -1,0 +1,48 @@
+{% extends "sales/base.html" %}
+{% block title %}Deals{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div><h1>Deals</h1><p class="sub">{{ page.paginator.count }} deal{{ page.paginator.count|pluralize }} · MYR {{ total|floatformat:"2g" }} in total</p></div>
+  <div class="actions">
+    <a class="btn" href="{% querystring format="csv" page=None %}" download>Export CSV</a>
+    <a class="btn btn-primary" href="{% url 'pipeline' %}">Board view</a>
+  </div>
+</div>
+
+<form class="filters panel" method="get" role="search" aria-label="Filter deals">
+  {% include "sales/_field.html" with field=filters.stage %}
+  {% if filters.owner %}{% include "sales/_field.html" with field=filters.owner %}{% endif %}
+  {% include "sales/_field.html" with field=filters.region %}
+  {% include "sales/_field.html" with field=filters.quarter %}
+  <div class="field-search">{% include "sales/_field.html" with field=filters.q %}</div>
+  <div class="actions"><button class="btn" type="submit">Filter</button>{% if filters.narrowed %}<a class="btn btn-quiet" href="{% url 'opportunities' %}">Clear</a>{% endif %}</div>
+</form>
+
+<section class="panel">
+  {% if page.object_list %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th scope="col">Deal</th><th scope="col">Account</th><th scope="col">Stage</th><th scope="col">Next step</th>{% if is_manager %}<th scope="col">Owner</th>{% endif %}<th scope="col" class="num">Value (MYR)</th><th scope="col" class="num">Close</th></tr></thead>
+      <tbody>
+        {% for deal in page.object_list %}
+        <tr>
+          <td><a href="{% url 'opportunity' deal.pk %}">{{ deal.title }}</a></td>
+          <td>{{ deal.account.name }}</td>
+          <td>{% include "sales/_stage.html" %}</td>
+          <td>{% if deal.is_open %}{% include "sales/_indicator.html" %}{% else %}<span class="muted">closed {{ deal.closed_at|date:"j M Y" }}</span>{% endif %}</td>
+          {% if is_manager %}<td>{{ deal.owner.get_full_name|default:deal.owner.username }}</td>{% endif %}
+          <td class="num">{{ deal.amount|floatformat:"2g" }}</td>
+          <td class="num">{{ deal.expected_close|date:"j M Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "sales/_pager.html" %}
+  {% elif filters.narrowed %}
+  <div class="empty"><strong>No deals match</strong>Try another stage, quarter or search. <a href="{% url 'opportunities' %}">Clear the filters</a></div>
+  {% else %}
+  <div class="empty"><strong>No open deals yet</strong>Convert a lead, or start a deal from an account.</div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,39 @@
+# Ombak Metal Works sales CRM (Django + PostgreSQL). Local demo: http://localhost:8082
+name: ombak-crm
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${CRM_DB_PASSWORD:-local-demo-only}
+    volumes:
+      - crm-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build: .
+    image: ombak-crm:1
+    environment:
+      DJANGO_SECRET_KEY: ${CRM_SECRET_KEY:-local-demo-only-not-secret}
+      POSTGRES_HOST: db
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: ${CRM_DB_PASSWORD:-local-demo-only}
+      DEMO_PASSWORD: ${CRM_DEMO_PASSWORD:-Sales@2026}
+    volumes:
+      - ./:/app  # dev bind mount: code edits show up after a restart
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8082:8000"
+    restart: unless-stopped
+
+volumes:
+  crm-db:

@@ -1,4 +1,4 @@
-# Ombak Metal Works: factory ERP demo
+# Ombak Metal Works: factory ERP and sales CRM demo
 
 [中文说明](#中文说明)
 
@@ -6,11 +6,12 @@ Ombak Metal Works Sdn Bhd is a **fictional** make-to-order sheet-metal fabricato
 This repo implements its ERP on **ERPNext v16**, adds a custom Frappe app, `ombak_mfg`, for
 the things a production manager needs that ERPNext doesn't ship with, and a **Django
 shop-floor terminal** that operators use on a tablet, talking to ERPNext only through its
-REST API.
+REST API. The sales team works in a separate **Django sales CRM**.
 
-Part 1 of 3: **ERP** (this folder: `ERP/`: ERPNext + `ombak_mfg` + the Django terminal) →
-part 2 **CRM** (Django, `CRM/`) → part 3 **integration** (CRM deal won → ERP sales order).
-All company, customer, supplier and person names are invented.
+Part 1 of 3: **ERP** (`ERP/`: ERPNext + `ombak_mfg` + the Django terminal) → part 2
+**CRM** (Django + PostgreSQL, `CRM/`, [below](#sales-crm-django)) → part 3 **integration**
+(CRM deal won → ERP sales order). All company, customer, supplier and person names are
+invented.
 
 ## What it shows
 
@@ -155,6 +156,159 @@ with auto-refresh.
 
 ![Complete form](ERP/docs/screenshots/terminal-complete.png)
 
+## Sales CRM (Django)
+
+The sales team's own system (`CRM/`, Django 6.1 on PostgreSQL 17), separate from the ERP
+for now. Web enquiries become leads that go to the rep for the customer's region. Leads
+become deals that move through the factory's stages. Quotes come from the price list, and
+big discounts need the sales manager. Every deal ends won, or lost with a reason. The
+product codes and prices are the ERPNext items, so part 3 can turn a won deal into an
+ERPNext sales order without mapping.
+
+```mermaid
+flowchart LR
+    W[Web enquiry form] -->|region round robin| L[Lead]
+    R[Rep] --> L
+    L -->|convert| D[Deal<br/>Enquiry → Technical review → Quotation → Negotiation]
+    D --> Q[Quote from price list]
+    Q -->|any line > 10 % off| M{Sales manager<br/>approves?}
+    M -->|yes| S[Sent to customer]
+    M -->|no, with a note| Q
+    Q -->|≤ 10 %| S
+    S --> WON[Won] & LOST[Lost + reason]
+    WON -. part 3 .-> SO[ERPNext sales order]
+```
+
+```bash
+cd CRM
+docker compose up -d --build                       # PostgreSQL + Django on http://localhost:8082
+docker compose exec web python manage.py seed_demo  # team, products, 16 accounts, ~50 deals over 5 quarters
+bash scripts/test.sh                                # 155 tests on PostgreSQL
+```
+
+| Login (local demo only, `Sales@2026`) | Role | Region |
+|---|---|---|
+| `hafiz` | sales manager: sees everything, approves discounts, reassigns, `/admin/` | |
+| `aisyah` | rep | North (Perlis, Kedah, Penang, Perak, Kelantan, Terengganu) |
+| `kumar`, `jason` | reps | Central (Selangor, KL, Putrajaya, N. Sembilan, Pahang, East Malaysia) |
+| `siti` | rep | South (Johor, Melaka) |
+| `weiling` | rep | Singapore |
+
+The public enquiry form is at **http://localhost:8082/enquiry/** (no sign-in).
+
+**The rules it enforces**
+- **Lead routing:** a rep who types a lead owns it. A web enquiry goes to the active rep
+  in its region with the fewest open leads (Central has two reps, so they take turns). If
+  the region has no active rep, the lead is unassigned and appears on the manager's My day.
+- **Stages:** Enquiry 10 %, Technical review / sampling 25 %, Quotation 50 %, Negotiation
+  75 %. A deal can't enter Quotation or Negotiation without a sent quote, can't be won
+  without one, and can't be lost without a reason from the admin-editable list. Every
+  move is in the deal's history (who, when).
+- **Quotes:** the unit price is the list price and can't be typed; the only lever is a
+  per-line discount. Any line above 10 % sends the quote to the manager, who approves or
+  rejects with a note.
+  - The manager approves exactly the lines on screen. If the quote changed after the page
+    was opened, Approve is refused with "This quote changed since you opened it".
+  - Only approved quotes can be printed or sent, and approved or sent quotes are locked.
+  - "Revise" makes a new draft. The old quote stays sent until the revision goes out.
+- **Editing:**
+  - The owner or the manager edits an open deal (title, contact, expected close, value).
+    The value locks once a quote is sent, because the quote sets it.
+  - Open leads can be corrected. A new state moves the lead to the new region but keeps
+    its owner.
+  - Accounts and contacts are shared, so anyone can edit them.
+  - Won, lost, converted and disqualified records are read-only.
+  - The manager reassigns a deal to another rep, and its open activities move with it.
+- **Reps see only their own** leads, deals, quotes and activities. Another rep's record
+  answers 404, not 403, so ids don't leak. Accounts are shared.
+- **Reports** for any quarter:
+  - open pipeline by stage (value and weighted value);
+  - win rate per rep (won ÷ (won + lost), by count);
+  - forecast (won + weighted pipeline closing in the quarter, plus a best case);
+  - lost reasons.
+- **My day:**
+  - Everyone sees their overdue and today's activities, deals with no next step, deals
+    untouched for 14 days, and new leads.
+  - The manager's deal panels cover the whole team and name each owner. The manager also
+    sees quotes waiting for approval and unassigned leads.
+  - "Today" is a Kuala Lumpur date, also at 7 a.m. when UTC is still yesterday.
+
+**Design decisions worth asking about**
+- **Rules live in one place.** `rules.py` holds the money, discount and stage rules as
+  plain functions.
+  - The workflow methods on the models (`Quote.submit/approve/send/revise`,
+    `Opportunity.move_to/mark_won/mark_lost/edit/reassign`, `Lead.convert/edit`) take row
+    locks and re-check the state under the lock. A double click can't convert a lead or
+    win a deal twice, and a line added during Submit can't slip past approval.
+  - The database backs them up with check constraints: discount 0-100, qty > 0, an
+    activity has exactly one parent.
+- **Money is `Decimal`**, and each line is rounded half-up to 2 dp before summing (85.00 × 3
+  less 7.5 % = 235.88).
+- **Reports run a fixed number of aggregate queries** (≤ 15 for the whole page), however
+  many deals there are. A test counts them.
+- **Board without a JS framework:** every card has a "Move to" select that works by
+  keyboard and without JavaScript. Drag and drop just submits that same form, so both go
+  through the same server rules.
+- **Safe by default:**
+  - CSRF on every POST, and a strict CSP (no inline script or style).
+  - Sign-in lockout after 10 failures per username in 15 minutes. It covers `/login/`
+    and `/admin/login/` alike, and a database row lock counts parallel attempts exactly.
+  - The manager can manage reps in `/admin/` but can't grant anyone admin rights.
+  - The enquiry form has a honeypot and a rate limit.
+  - The CSV export neutralises spreadsheet formulas, because names typed into the public
+    form end up in it.
+- **Accessible:**
+  - 44 px controls and visible focus.
+  - Form errors sit next to their field, and focus jumps to the first one.
+  - Labelled controls on the board, and server-rendered SVG bars in the reports.
+  - Lighthouse 100/100/100 on My day, the board and a quote page.
+
+**Code layout** (`CRM/sales/`)
+
+| Module | Job |
+|---|---|
+| `models.py` | data model + workflow methods (row-locked) |
+| `rules.py` | pure rules: money, approval limit, stage gates, next-activity indicator, win rate |
+| `regions.py` | state → region table, round-robin owner pick |
+| `access.py` | who sees what (every view gets records through it) |
+| `ratelimit.py` | fixed-window counters for the sign-in lockout and the enquiry limit |
+| `admin.py` | products, lost reasons, reps; the user admin that stops privilege escalation |
+| `reports.py` | the four reports as aggregate queries |
+| `views/` | My day, sign-in, leads, enquiry, accounts, activities, deals and board, quotes, reports |
+| `management/commands/seed_demo.py` | idempotent demo data relative to today |
+| `tests/` | 155 tests covering every case in `.specship/completed/003-django-crm/artifacts/test-cases.md` |
+
+Settings come from environment variables with local-demo defaults (`CRM/docker-compose.yml`):
+`CRM_SECRET_KEY`, `CRM_DB_PASSWORD`, `CRM_DEMO_PASSWORD`. `CRM/scripts/ui-probe/` checks
+three screen sizes, the focus after a form error, and Lighthouse.
+
+**Locked out?** Ten wrong passwords lock a username for 15 minutes, and there is no unlock
+button. To clear one user's lock:
+`docker compose exec web python manage.py shell -c "from sales import ratelimit; ratelimit.clear('login', 'hafiz')"`.
+
+**Limits:**
+- MYR only, and prices exclude SST (ERPNext adds tax on the order).
+- One approval level.
+- No email or calendar sync, attachments or custom fields.
+- Closed deals can't be reopened.
+- Edits and reassignments aren't kept in the deal history.
+- Reps get no notification when a quote is approved or rejected, and expired quotes carry
+  no marker.
+- The enquiry limit keys on the client address, which is the Docker gateway for every
+  local visitor, so five enquiries from anyone close the form for an hour.
+
+| My day (manager) | Pipeline |
+|---|---|
+| ![My day](CRM/docs/screenshots/crm-my-day.png) | ![Pipeline board](CRM/docs/screenshots/crm-pipeline.png) |
+
+| Quote waiting for approval | Reports |
+|---|---|
+| ![Quote approval](CRM/docs/screenshots/crm-quote-approval.png) | ![Reports](CRM/docs/screenshots/crm-reports.png) |
+
+| Edit a deal | My day on a phone |
+|---|---|
+| ![Deal edit](CRM/docs/screenshots/crm-deal-edit.png) | ![My day on a phone](CRM/docs/screenshots/crm-my-day-phone.png) |
+
 ## Demo video click path
 
 1. **Ombak Factory** workspace: the 3 number cards and the report shortcuts.
@@ -167,6 +321,10 @@ with auto-refresh.
 8. Log in as the production manager → **bell** → overdue alert → filtered list.
 9. **Terminal** (http://localhost:8081, `rajesh`): Laser Cutting → **Start** a Ready card → timer → **Pause** → **Resume** → **Complete** with one defect line → the card leaves the queue.
 10. Back in ERPNext Desk: that **Job Card** is Completed with Rajesh Kumar's time logs, and the **Defect Log** is there; the next operation's card is now Ready on its station.
+11. **CRM** (http://localhost:8082/enquiry/, signed out): send an enquiry from Johor → sign in as `siti`: it's on her My day.
+12. Convert it → **Pipeline**: move the new deal with its "Move to" control; moving it to Quotation is refused until a quote is sent.
+13. **New quote** with a 15 % line → **Finish the quote** → sign in as `hafiz` → **Approvals** → approve → back as `siti`: **Mark as sent**, then **Mark won**.
+14. `hafiz` → **Reports**: the won deal in the win rate and forecast; **My day** shows the team's deals with no next step.
 
 ## Design decisions and limits
 
@@ -180,7 +338,7 @@ with auto-refresh.
 
 ERPNext / Frappe v16, MariaDB, Redis, Docker. Python for the app, SQL (via Frappe's query
 builder, always with bound parameters) for the reports. Django 6.1, gunicorn and WhiteNoise
-for the shop-floor terminal, with plain CSS (design tokens) and a few lines of JavaScript. Built with AI assistance (Claude) using a
+for the shop-floor terminal and the sales CRM (on PostgreSQL 17), with plain CSS (design tokens) and a few lines of JavaScript. Built with AI assistance (Claude) using a
 spec → tests → build → independent review workflow; the specs and test plans are in `.specship/`.
 
 ---
@@ -189,10 +347,10 @@ spec → tests → build → independent review workflow; the specs and test pla
 
 **Ombak Metal Works Sdn Bhd** 是一家**虚构**的柔佛州钣金加工厂（按订单生产）。这个仓库用 **ERPNext v16**
 实施它的 ERP，写了一个自定义 Frappe 应用 `ombak_mfg`，补上 ERPNext 原本没有、但生产主管需要的功能，
-另外用 **Django** 写了一个车间平板报工页，只通过 REST API 读写 ERPNext。
+另外用 **Django** 写了一个车间平板报工页，只通过 REST API 读写 ERPNext。销售团队用的是另一套 **Django 销售 CRM**。
 
-这是三部分中的第一部分：**ERP**（`ERP/`：ERPNext + `ombak_mfg` + Django 平板页）→ 第二部分 **CRM**（Django，`CRM/`）
-→ 第三部分 **系统串接**（CRM 成交 → ERP 自动建销售订单）。公司、客户、供应商和人名全部是虚构的。
+整个项目分三部分：**ERP**（`ERP/`：ERPNext + `ombak_mfg` + Django 平板页）→ **CRM**（Django + PostgreSQL，`CRM/`，见[下文](#销售-crmdjango)）
+→ **系统串接**（CRM 成交 → ERP 自动建销售订单）。公司、客户、供应商和人名全部是虚构的。
 
 ### 内容
 
@@ -241,6 +399,52 @@ ERPNext 打开 **http://localhost:8080**，平板页打开 **http://localhost:80
 - **最小权限**：对接用户只有一个专用角色「Shop Floor Terminal」，读不了销售、会计、BOM、库存，也不能新建或取消工单（测试逐项验证）。完成工序卡时 ERPNext 要更新已提交的工单，所以保留了工单的「提交」权限。
 - **安全**：所有操作都是带 CSRF 的 POST；工序卡名称只接受 `PO-JOB` 加 ASCII 数字；ERPNext 错误里的 HTML 会被去掉；严格的 CSP；按钮 64 px，戴手套也能按；Lighthouse 手机模式 100/100/100。
 - **限制**：完成时只报剩余全部数量；不良只能在完成时登记，最多 3 行；没有扫码、离线和快速切换操作员。
+
+### 销售 CRM（Django）
+
+销售团队自己的系统（`CRM/`，Django 6.1 + PostgreSQL 17），暂时和 ERP 分开。
+
+- **线索**：网站询价会分给该地区里未跟进线索最少的业务员；业务员自己录入的线索归自己。
+- **商机**：按工厂的阶段推进：询价 → 技术评估 / 打样 → 报价 → 议价。没有发出报价，不能进入报价阶段，也不能成交；丢单必须选原因。
+- **报价**：单价就是价目表价格，不能手改，只能按行给折扣。任何一行折扣超过 10% 都要经理批准；经理批准的必须是他当时看到的版本，报价单在这之后有改动，批准会被拒。
+- **编辑**：
+  - 负责人或经理可以修改未结案的商机（标题、联系人、预计成交日期、金额）；报价发出后，金额锁定。
+  - 未结案的线索可以修改；改了州属，所属地区会跟着变，负责人不变。
+  - 客户和联系人是共享的，任何人都可以修改。
+  - 已成交、已丢单、已转换、已取消资格的记录都不能再改。
+  - 经理可以把商机改派给别的业务员，未完成的活动会一起转过去。
+- **权限**：业务员只看得到自己的线索、商机、报价和活动；访问别人的记录一律返回 404。
+- **报表**：按季度显示各阶段的管道金额（含加权金额）、每个业务员的成交率（按件数）、预测，以及丢单原因。
+- **我的一天**：逾期和今天的活动、没有下一步的商机、14 天没动的商机、新线索。经理看到的是整个团队的商机，另外还有待审批的报价和未分配的线索。"今天"按吉隆坡时间计算。
+
+```bash
+cd CRM
+docker compose up -d --build                       # http://localhost:8082
+docker compose exec web python manage.py seed_demo  # 演示数据
+bash scripts/test.sh                                # 155 个测试
+```
+
+账号（密码都是 `Sales@2026`）：`hafiz` 是销售经理；`aisyah`（北区）、`kumar` 和 `jason`（中区）、`siti`（南区）、`weiling`（新加坡）是业务员。公开询价表单在 **http://localhost:8082/enquiry/**，不用登录。
+
+- **设计重点**：
+  - 金额用 `Decimal`，每行先四舍五入到 2 位小数再加总。
+  - 关键操作都加行锁，并在锁内重新检查状态，所以重复点击不会把同一条线索转换两次。
+  - 报表的查询次数是固定的，不会随商机数量增加。
+  - 看板不靠 JS 框架，每张卡片都有"移到"下拉框，键盘也能操作。
+  - 所有 POST 都带 CSRF，并且启用了严格的 CSP。
+  - 同一个用户名 15 分钟内输错 10 次密码就会被锁，`/login/` 和 `/admin/login/` 共用一个计数。
+  - 经理可以在后台管理业务员，但不能给任何人管理员权限。
+  - 表单出错时，提示显示在字段旁边，焦点会自动移到第一个出错的字段。
+  - Lighthouse 100/100/100。
+- **被锁住了？** 系统里没有解锁按钮，可以用这条命令解除某个用户的锁定：`docker compose exec web python manage.py shell -c "from sales import ratelimit; ratelimit.clear('login', 'hafiz')"`。
+- **限制**：
+  - 只用马币，价格不含 SST。
+  - 只有一级审批。
+  - 没有邮件和日历同步，也不能上传附件。
+  - 结案的商机不能重新打开。
+  - 商机的修改和改派不留历史记录。
+  - 报价被批准或驳回时，业务员不会收到通知。
+  - 本地运行时，所有访客共用 Docker 网关的 IP，所以任何人提交 5 次询价后，表单会关闭一小时。
 
 ### 取舍与限制
 

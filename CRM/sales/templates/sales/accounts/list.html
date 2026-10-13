@@ -1,0 +1,49 @@
+{% extends "sales/base.html" %}
+{% block title %}Accounts{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div><h1>Accounts</h1><p class="sub">Customers and prospects, shared by the whole team.</p></div>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'account_new' %}">New account</a></div>
+</div>
+
+<form class="filters panel" method="get" role="search" aria-label="Filter accounts">
+  <div class="field">
+    <label for="id_region">Region</label>
+    <select name="region" id="id_region">
+      <option value="">All regions</option>
+      {% for value, label in regions %}<option value="{{ value }}"{% if value == region %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field field-search">
+    <label for="id_q">Search</label>
+    <input type="search" name="q" id="id_q" value="{{ q }}" placeholder="Account name" maxlength="100">
+  </div>
+  <div class="actions"><button class="btn" type="submit">Filter</button>{% if q or region %}<a class="btn btn-quiet" href="{% url 'accounts' %}">Clear</a>{% endif %}</div>
+</form>
+
+<section class="panel">
+  {% if page.object_list %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th scope="col">Account</th><th scope="col">Industry</th><th scope="col">Location</th><th scope="col">Region</th><th scope="col">Account owner</th></tr></thead>
+      <tbody>
+        {% for account in page.object_list %}
+        <tr>
+          <td><a href="{% url 'account' account.pk %}">{{ account.name }}</a></td>
+          <td>{{ account.get_industry_display|default:"" }}</td>
+          <td>{{ account.city }}{% if account.city %}, {% endif %}{{ account.state }}</td>
+          <td>{{ account.region.label }}</td>
+          <td>{{ account.owner.get_full_name|default:"" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "sales/_pager.html" %}
+  {% elif q or region %}
+  <div class="empty"><strong>No accounts match</strong><a href="{% url 'accounts' %}">Clear the filters</a></div>
+  {% else %}
+  <div class="empty"><strong>No accounts yet</strong>Converting a lead creates one, or <a href="{% url 'account_new' %}">add one</a>.</div>
+  {% endif %}
+</section>
+{% endblock %}

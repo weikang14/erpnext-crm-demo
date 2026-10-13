@@ -1,0 +1,29 @@
+{% extends "sales/base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+<div class="pagehead"><div><h1>Approvals</h1><p class="sub">Quotes with a line above {{ limit|floatformat }} % discount wait here for you.</p></div></div>
+<section class="panel">
+  {% if pending %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th scope="col">Quote</th><th scope="col">Customer</th><th scope="col">Rep</th><th scope="col" class="num">Highest discount</th><th scope="col" class="num">Total (MYR)</th><th scope="col">Waiting since</th><th scope="col"><span class="visually-hidden">Review</span></th></tr></thead>
+      <tbody>
+        {% for q in pending %}
+        <tr>
+          <td><a href="{% url 'quote' q.pk %}">{{ q.number }}</a><div class="muted">{{ q.opportunity.title }}</div></td>
+          <td>{{ q.opportunity.account.name }}</td>
+          <td>{{ q.opportunity.owner.get_full_name|default:q.opportunity.owner.username }}</td>
+          <td class="num"><span class="chip chip-amber">{{ q.max_discount|floatformat:"-2" }} %</span></td>
+          <td class="num">{{ q.total_value|floatformat:"2g" }}</td>
+          <td>{{ q.created_at|date:"j M Y" }}</td>
+          <td><a class="btn btn-small btn-primary" href="{% url 'quote' q.pk %}">Review<span class="visually-hidden"> {{ q.number }}</span></a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>Nothing waiting</strong>When a rep sends a quote above the discount limit, it shows up here.</div>
+  {% endif %}
+</section>
+{% endblock %}

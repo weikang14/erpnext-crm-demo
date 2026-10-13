@@ -1,0 +1,1 @@
+{% if deal.stage == "won" %}<span class="chip chip-green">Won</span>{% elif deal.stage == "lost" %}<span class="chip chip-red">Lost</span>{% else %}<span class="chip chip-blue">{{ deal.get_stage_display }}</span>{% endif %}

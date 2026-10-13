@@ -1,0 +1,77 @@
+{% extends "sales/base.html" %}
+{% block title %}{{ account.name }}{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <p class="crumbs"><a href="{% url 'accounts' %}">Accounts</a></p>
+    <h1>{{ account.name }}</h1>
+    <p class="sub">{{ account.get_industry_display|default:"Customer" }} · {{ account.city }}{% if account.city %}, {% endif %}{{ account.state }} · {{ account.region.label }} region</p>
+  </div>
+</div>
+
+<div class="grid grid-2">
+  <div>
+    <section class="panel" aria-labelledby="deals-heading">
+      <div class="panelhead"><h2 id="deals-heading">Deals</h2></div>
+      {% if open_deals or closed_deals %}
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr><th scope="col">Deal</th><th scope="col">Stage</th><th scope="col">Owner</th><th scope="col" class="num">Value (MYR)</th><th scope="col">Close</th></tr></thead>
+          <tbody>
+            {% for deal in open_deals %}{% include "sales/accounts/_deal_row.html" %}{% endfor %}
+            {% for deal in closed_deals %}{% include "sales/accounts/_deal_row.html" %}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty"><strong>No deals {% if not is_manager %}of yours {% endif %}here yet</strong></div>
+      {% endif %}
+      <details class="addform"{% if deal_form.errors %} open{% endif %}>
+        <summary class="btn">New deal for this account</summary>
+        <form method="post" action="{% url 'account_deal_new' account.pk %}" class="formgrid" novalidate>
+          {% csrf_token %}
+          {% for field in deal_form %}{% include "sales/_field.html" %}{% endfor %}
+          <div class="form-actions wide"><button class="btn btn-primary" type="submit">Create deal</button></div>
+        </form>
+      </details>
+    </section>
+    {% include "sales/_activities.html" with parent_type="account" parent=account can_add=True show_parent=True %}
+  </div>
+
+  <div>
+    <section class="panel" aria-labelledby="info-heading">
+      <div class="panelhead">
+        <h2 id="info-heading">Details</h2>
+        <a class="btn" href="{% url 'account_edit' account.pk %}">Edit<span class="visually-hidden"> account details</span></a>
+      </div>
+      <dl class="details">
+        <dt>SSM / UEN</dt><dd>{{ account.registration_no|default:"not recorded" }}</dd>
+        <dt>Address</dt><dd>{{ account.address|default:"" }}{% if account.address %}, {% endif %}{{ account.postcode }} {{ account.city }}, {{ account.state }}, {{ account.country }}</dd>
+        <dt>Phone</dt><dd>{{ account.phone|default:"not recorded" }}</dd>
+        {% if account.website %}<dt>Website</dt><dd><a href="{{ account.website }}" rel="noopener noreferrer">{{ account.website }}</a></dd>{% endif %}
+        <dt>Owner</dt><dd>{{ account.owner.get_full_name|default:"none" }}</dd>
+      </dl>
+    </section>
+    <section class="panel" aria-labelledby="contacts-heading">
+      <h2 id="contacts-heading">Contacts</h2>
+      {% if contacts %}
+      <ul class="items">
+        {% for c in contacts %}
+        <li><div class="what"><strong>{{ c.name }}</strong><div class="meta">{{ c.job_title }}{% if c.email %} · <a href="mailto:{{ c.email }}">{{ c.email }}</a>{% endif %}{% if c.phone %} · {{ c.phone }}{% endif %}</div></div><a class="btn btn-small" href="{% url 'account_contact_edit' account.pk c.pk %}">Edit<span class="visually-hidden"> {{ c.name }}</span></a></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="empty"><strong>No contacts yet</strong></div>
+      {% endif %}
+      <details class="addform"{% if contact_form.errors %} open{% endif %}>
+        <summary class="btn">Add a contact</summary>
+        <form method="post" action="{% url 'account_contact_add' account.pk %}" novalidate>
+          {% csrf_token %}
+          {% for field in contact_form %}{% include "sales/_field.html" %}{% endfor %}
+          <button class="btn btn-primary" type="submit">Save contact</button>
+        </form>
+      </details>
+    </section>
+  </div>
+</div>
+{% endblock %}

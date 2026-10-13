@@ -1,0 +1,40 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Ombak Metal Works sales CRM">
+  <title>{% block title %}{% endblock %} · Ombak CRM</title>
+  <link rel="icon" href="{% static 'sales/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'sales/app.css' %}">
+  <script src="{% static 'sales/app.js' %}" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  {% if user.is_authenticated %}
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}">Ombak <span>CRM</span></a>
+    <nav class="mainnav" aria-label="Main">
+      {% for name, label, key in nav_links %}
+      <a href="{% url name %}"{% if key == section %} aria-current="page"{% endif %}>{{ label }}{% if key == "approvals" and pending_approvals %} <span class="count" aria-label="{{ pending_approvals }} waiting">{{ pending_approvals }}</span>{% endif %}</a>
+      {% endfor %}
+    </nav>
+    <form class="signout" method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <span class="who">{{ user.get_full_name|default:user.username }}{% if is_manager %} · Manager{% endif %}</span>
+      <button class="btn btn-quiet" type="submit">Sign out</button>
+    </form>
+  </header>
+  {% endif %}
+  <main id="main" class="page">
+    {% if messages %}
+    <div class="messages">
+      {% for message in messages %}
+      <p class="msg msg-{{ message.tags }}"{% if message.level_tag == "error" %} role="alert"{% else %} role="status"{% endif %}>{{ message }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

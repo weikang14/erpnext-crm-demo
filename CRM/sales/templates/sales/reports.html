@@ -1,0 +1,120 @@
+{% extends "sales/base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div><h1>Reports</h1><p class="sub">{% if is_manager %}Whole team{% else %}Your deals{% endif %} · {{ start|date:"j M" }} to {{ end|date:"j M Y" }}</p></div>
+</div>
+
+<form class="filters panel" method="get" aria-label="Report period and scope">
+  <div class="field">
+    <label for="id_quarter">Quarter</label>
+    <select name="quarter" id="id_quarter">
+      {% for value, label in quarters %}<option value="{{ value }}"{% if value == quarter %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  {% if is_manager %}
+  <div class="field">
+    <label for="id_region">Region</label>
+    <select name="region" id="id_region">
+      <option value="">All regions</option>
+      {% for value, label in regions %}<option value="{{ value }}"{% if value == region %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="id_owner">Rep</label>
+    <select name="owner" id="id_owner">
+      <option value="">Whole team</option>
+      {% for u in owners %}<option value="{{ u.pk }}"{% if u.pk|stringformat:"s" == owner %} selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="actions"><button class="btn" type="submit">Show</button></div>
+</form>
+
+<section aria-labelledby="forecast-heading">
+  <h2 id="forecast-heading">Forecast for the quarter</h2>
+  <div class="stats">
+    <div class="stat"><span class="stat-label">Won so far</span><span class="stat-value">MYR {{ forecast.won|floatformat:"2g" }}</span></div>
+    <div class="stat"><span class="stat-label">Weighted open pipeline</span><span class="stat-value">MYR {{ forecast.weighted|floatformat:"2g" }}</span><span class="stat-note">{{ forecast.open_count }} open deal{{ forecast.open_count|pluralize }} closing this quarter, value x stage probability</span></div>
+    <div class="stat stat-strong"><span class="stat-label">Forecast</span><span class="stat-value">MYR {{ forecast.forecast|floatformat:"2g" }}</span><span class="stat-note">won + weighted</span></div>
+    <div class="stat"><span class="stat-label">Best case</span><span class="stat-value">MYR {{ forecast.best_case|floatformat:"2g" }}</span><span class="stat-note">won + every open deal closing this quarter</span></div>
+  </div>
+  {% if forecast.overdue %}<p class="msg msg-warning">{{ forecast.overdue }} open deal{{ forecast.overdue|pluralize }} {{ forecast.overdue|pluralize:"has,have" }} an expected close date in the past. Update {{ forecast.overdue|pluralize:"it,them" }} so the forecast stays honest: <a href="{% url 'opportunities' %}">deal list</a>.</p>{% endif %}
+</section>
+
+<div class="grid grid-halves">
+  <section class="panel" aria-labelledby="stage-heading">
+    <h2 id="stage-heading">Open pipeline by stage</h2>
+    <p class="muted small">All open deals today, whatever their close date.</p>
+    <div class="tablewrap">
+      <table class="table">
+        <thead><tr><th scope="col">Stage</th><th scope="col" class="num">Deals</th><th scope="col" class="num">Value (MYR)</th><th scope="col" class="num">Weighted</th><th scope="col" class="barcol"><span class="visually-hidden">Share of value</span></th></tr></thead>
+        <tbody>
+          {% for row in stages %}
+          <tr>
+            <td>{{ row.label }} <span class="muted">({{ row.probability }} %)</span></td>
+            <td class="num">{{ row.count }}</td>
+            <td class="num">{{ row.value|floatformat:"2g" }}</td>
+            <td class="num">{{ row.weighted|floatformat:"2g" }}</td>
+            <td class="barcol"><svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect width="{{ row.bar }}" height="10"/></svg></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr><td>Total</td><td class="num">{{ stage_total.count }}</td><td class="num">{{ stage_total.value|floatformat:"2g" }}</td><td class="num">{{ stage_total.weighted|floatformat:"2g" }}</td><td></td></tr></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="win-heading">
+    <h2 id="win-heading">Win rate by rep</h2>
+    <p class="muted small">Deals closed this quarter. Win rate = won / (won + lost), by number of deals.</p>
+    {% if reps %}
+    <div class="tablewrap">
+      <table class="table">
+        <thead><tr><th scope="col">Rep</th><th scope="col" class="num">Won</th><th scope="col" class="num">Lost</th><th scope="col" class="num">Win rate</th><th scope="col" class="num">Won value (MYR)</th><th scope="col" class="barcol"><span class="visually-hidden">Win rate bar</span></th></tr></thead>
+        <tbody>
+          {% for row in reps %}
+          <tr>
+            <td>{{ row.rep }}</td>
+            <td class="num">{{ row.won }}</td>
+            <td class="num">{{ row.lost }}</td>
+            <td class="num">{{ row.rate }} %</td>
+            <td class="num">{{ row.won_value|floatformat:"2g" }}</td>
+            <td class="barcol"><svg class="bar bar-green" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect width="{{ row.rate }}" height="10"/></svg></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr><td>Team</td><td class="num">{{ rep_total.won }}</td><td class="num">{{ rep_total.lost }}</td><td class="num">{{ rep_total.rate }} %</td><td class="num">{{ rep_total.won_value|floatformat:"2g" }}</td><td></td></tr></tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><strong>Nothing closed this quarter yet</strong>Pick an earlier quarter above.</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="panel" aria-labelledby="lost-heading">
+  <h2 id="lost-heading">Why we lost</h2>
+  {% if reasons %}
+  <div class="tablewrap">
+    <table class="table">
+      <thead><tr><th scope="col">Lost reason</th><th scope="col" class="num">Deals</th><th scope="col" class="num">Share</th><th scope="col" class="num">Value (MYR)</th><th scope="col" class="barcol"><span class="visually-hidden">Share bar</span></th></tr></thead>
+      <tbody>
+        {% for row in reasons %}
+        <tr>
+          <td>{{ row.reason }}</td>
+          <td class="num">{{ row.count }}</td>
+          <td class="num">{{ row.share }} %</td>
+          <td class="num">{{ row.value|floatformat:"2g" }}</td>
+          <td class="barcol"><svg class="bar bar-red" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true"><rect width="{{ row.share }}" height="10"/></svg></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><td>Total</td><td class="num">{{ reason_total.count }}</td><td class="num">100 %</td><td class="num">{{ reason_total.value|floatformat:"2g" }}</td><td></td></tr></tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><strong>No deals lost this quarter</strong></div>
+  {% endif %}
+</section>
+{% endblock %}

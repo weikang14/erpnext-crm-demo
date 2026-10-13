@@ -1,0 +1,8 @@
+{
+  "name": "ombak-crm-ui-probe",
+  "private": true,
+  "type": "module",
+  "description": "Checks the CRM at desktop/tablet/phone sizes and runs Lighthouse. Uses the installed Chrome.",
+  "scripts": { "probe": "node probe.mjs" },
+  "dependencies": { "lighthouse": "13.5.0", "puppeteer-core": "25.12.0" }
+}

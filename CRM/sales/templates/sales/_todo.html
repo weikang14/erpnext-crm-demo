@@ -1,0 +1,14 @@
+<li>
+  <div class="what">
+    <span class="chip">{{ a.get_kind_display }}</span> <strong>{{ a.subject }}</strong>
+    <div class="meta">
+      {% if state == "overdue" %}<span class="ind ind-overdue">Overdue since {{ a.due_date|date:"j M" }}</span>{% else %}<span class="ind ind-today">Today</span>{% endif %}
+      · {% if a.opportunity %}<a href="{% url 'opportunity' a.opportunity_id %}">{{ a.opportunity.title }}</a> ({{ a.opportunity.account.name }}){% elif a.lead %}<a href="{% url 'lead' a.lead_id %}">{{ a.lead.company }}</a>{% else %}<a href="{% url 'account' a.account_id %}">{{ a.account.name }}</a>{% endif %}
+    </div>
+  </div>
+  <form method="post" action="{% url 'activity_done' a.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{% url 'home' %}">
+    <button class="btn btn-small" type="submit">Mark done<span class="visually-hidden">: {{ a.subject }}</span></button>
+  </form>
+</li>

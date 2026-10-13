@@ -22,3 +22,8 @@ ERP/scripts/ui-probe/sid.txt
 ERP/scripts/ui-probe/*.png
 ERP/scripts/ui-probe/lighthouse-*.json
 ERP/scripts/ui-probe/package-lock.json
+CRM/scripts/ui-probe/node_modules/
+CRM/scripts/ui-probe/sid.txt
+CRM/scripts/ui-probe/*.png
+CRM/scripts/ui-probe/lighthouse-*.json
+CRM/scripts/ui-probe/package-lock.json

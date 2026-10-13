@@ -1,0 +1,17 @@
+{% extends "sales/base.html" %}
+{% block title %}Edit {{ form.initial.name }}{% endblock %}
+{% block content %}
+<div class="pagehead"><div><p class="crumbs"><a href="{% url 'accounts' %}">Accounts</a> / <a href="{% url 'account' contact.account_id %}">{{ contact.account.name }}</a></p><h1>Edit contact</h1><p class="sub">{{ form.initial.name }}</p></div></div>
+<section class="panel">
+  <form method="post" class="formgrid" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+    <div>{% include "sales/_field.html" %}</div>
+    {% endfor %}
+    <div class="form-actions wide">
+      <button class="btn btn-primary" type="submit">Save contact</button>
+      <a class="btn btn-quiet" href="{% url 'account' contact.account_id %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

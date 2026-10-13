@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-10-14: Part 2, sales CRM (contract 003)
+
+- **The app:** a Django 6.1 + PostgreSQL 17 sales CRM in `CRM/`, at http://localhost:8082.
+  - Leads routed by region (round robin), plus a public enquiry form with a honeypot and a rate limit.
+  - Duplicate warnings, and lead conversion.
+  - Accounts and contacts, activities, and a pipeline board (keyboard "Move to" and drag and drop) with stage gates.
+  - Won/lost with reasons.
+  - Quotes from the ERPNext price list, with manager approval above 10 % discount, send, revise and an A4 print page.
+  - My day, quarterly reports (pipeline, win rate, forecast, lost reasons) and a CSV export.
+- **Added after the first validation round (contract amendment AC23-26):**
+  - editing for deals, leads, accounts and contacts (a deal's value locks once a quote is sent);
+  - the manager reassigns deals;
+  - the manager's My day shows the whole team.
+- **Fixed during validation:**
+  - **Discount approval:** an unapproved discount could reach an Approved quote, first through a race between adding a line and Submit, then through a stale Approve or Finish page. The quote is now row-locked and carries a revision number.
+  - **Admin rights:** a sales manager could make themselves superuser in `/admin/`. The user admin is now guarded.
+  - **Sign-in lockout:**
+    - look-alike Unicode usernames got their own counters;
+    - `/admin/login/` skipped the lockout;
+    - parallel attempts could get more than 10 password checks.
+    The lockout is now one atomic counter shared by every sign-in path.
+  - **Layout:** the approvals and draft-quote pages scrolled sideways on phones.
+  - **Form errors:** four forms showed errors at the top of the page and lost what was typed. Errors now sit next to the field, and focus moves to it.
+- **Testing:** 155 Django tests; the UI probe now covers 3 sizes, the approvals and draft-quote pages, and focus after an error; Lighthouse 100/100/100.
+- **Validation:** independent code, security, integration, browser, design and alignment passes all PASS, with a skeptic re-check of the security fixes and a completeness critic covering 39/39 criteria.
+  - Recovery took 4 rounds. The 4th was authorised by the user beyond the 3-round budget.
+  - The user also approved a targeted re-run after round 3: security and alignment last ran on 4d7b80d, and the critic confirmed the later changes don't touch what they covered.
+- **Known issues (low severity):**
+  - A sign-in that succeeds at the same moment as a failed attempt for that username can raise a 500 (`ratelimit.hit`/`clear` race). It fails safe: nobody is signed in.
+  - While locked, `/admin/login/` shows Django's generic error instead of "Too many attempts".
+  - There is no unlock button (see the README for the shell command).
+  - The lockout key lower-cases the name, so two accounts that differ only in case share one counter.
+  - An account name using a look-alike letter of an existing name fails with no message (the duplicate check uses `iexact`, the database rule `Lower`).
+  - A manager can reset another non-superuser's password in `/admin/`.
+  - Text inputs with an error keep a grey border.
+  - The activity date says "(optional)" although a planned activity needs one.
+  - Deal pages are 331 px wide at 320 px.
+  - The Dockerfile still runs a now-unneeded `createcachetable`.
+
 ## 2026-10-05: Part 1, Django shop-floor terminal (contract 002)
 
 - Django 6.1 terminal (`ERP/portal`, http://localhost:8081): operators sign in, pick a workstation, and Start / Pause / Resume / Complete job cards and log defects; everything is written to ERPNext through REST v2.

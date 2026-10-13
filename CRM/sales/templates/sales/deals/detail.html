@@ -1,0 +1,114 @@
+{% extends "sales/base.html" %}
+{% block title %}{{ deal.title }}{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <p class="crumbs"><a href="{% url 'pipeline' %}">Pipeline</a> / <a href="{% url 'account' deal.account_id %}">{{ deal.account.name }}</a></p>
+    <h1>{{ deal.title }}</h1>
+    <p class="sub">{% include "sales/_stage.html" %} MYR {{ deal.amount|floatformat:"2g" }} · {{ deal.owner.get_full_name|default:deal.owner.username }}{% if deal.is_open %} · {% include "sales/_indicator.html" %}{% endif %}</p>
+  </div>
+  {% if deal.is_open %}
+  <div class="actions">
+    <form method="post" action="{% url 'opportunity_move' deal.pk %}" class="inline-move">
+      {% csrf_token %}
+      <label class="visually-hidden" for="id_stage">Move to</label>
+      {{ move_form.stage }}
+      <button class="btn" type="submit">Move</button>
+    </form>
+    <form method="post" action="{% url 'opportunity_won' deal.pk %}">
+      {% csrf_token %}
+      <button class="btn btn-success" type="submit"{% if not sent_quote %} disabled aria-describedby="won-hint"{% endif %}>Mark won</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% if deal.is_open and not sent_quote %}<p class="muted small" id="won-hint">To mark this deal won, send the customer a quote first.</p>{% endif %}
+{% if deal.stage == "lost" %}<p class="msg msg-error">Lost: {{ deal.lost_reason }}{% if deal.lost_note %} ({{ deal.lost_note }}){% endif %}, {{ deal.closed_at|date:"j M Y" }}.</p>{% endif %}
+{% if deal.stage == "won" %}<p class="msg msg-success">Won on {{ deal.closed_at|date:"j M Y" }}.</p>{% endif %}
+
+<div class="grid grid-2">
+  <div>
+    <section class="panel" aria-labelledby="quotes-heading">
+      <div class="panelhead">
+        <h2 id="quotes-heading">Quotes</h2>
+        {% if deal.is_open %}
+          {% if quote_in_progress %}<a class="btn" href="{% url 'quote' quote_in_progress.pk %}">Continue {{ quote_in_progress.number }}</a>
+          {% else %}<form method="post" action="{% url 'opportunity_quote_new' deal.pk %}">{% csrf_token %}<button class="btn btn-primary" type="submit">New quote</button></form>{% endif %}
+        {% endif %}
+      </div>
+      {% if quotes %}
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr><th scope="col">Quote</th><th scope="col">Status</th><th scope="col">Created</th><th scope="col" class="num">Total (MYR)</th></tr></thead>
+          <tbody>
+            {% for q in quotes %}
+            <tr>
+              <td><a href="{% url 'quote' q.pk %}">{{ q.number }}</a></td>
+              <td>{% include "sales/quotes/_status.html" %}</td>
+              <td>{{ q.created_at|date:"j M Y" }} by {{ q.created_by.get_full_name|default:q.created_by.username }}</td>
+              <td class="num">{{ q.total|floatformat:"2g" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty"><strong>No quotes yet</strong>{% if deal.is_open %}Prices come from the product list; discounts above 10 % go to the sales manager.{% endif %}</div>
+      {% endif %}
+    </section>
+
+    {% include "sales/_activities.html" with parent_type="opportunity" parent=deal can_add=deal.is_open %}
+
+    <section class="panel" aria-labelledby="history-heading">
+      <h2 id="history-heading">Stage history</h2>
+      <ol class="items">
+        {% for change in history %}
+        <li><div class="what">{% if change.from_stage %}{{ change.get_from_stage_display }} → {% else %}Created in {% endif %}<strong>{{ change.get_to_stage_display }}</strong></div><span class="meta">{{ change.at|date:"j M Y, H:i" }} · {{ change.by.get_full_name|default:change.by.username|default:"system" }}</span></li>
+        {% empty %}
+        <li class="muted">No stage changes recorded.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel" aria-labelledby="facts-heading">
+      <div class="panelhead">
+        <h2 id="facts-heading">Details</h2>
+        {% if deal.is_open %}<a class="btn" href="{% url 'opportunity_edit' deal.pk %}">Edit<span class="visually-hidden"> deal details</span></a>{% endif %}
+      </div>
+      <dl class="details">
+        <dt>Account</dt><dd><a href="{% url 'account' deal.account_id %}">{{ deal.account.name }}</a></dd>
+        <dt>Contact</dt><dd>{{ deal.contact.name|default:"none" }}{% if deal.contact.email %}<br><a href="mailto:{{ deal.contact.email }}">{{ deal.contact.email }}</a>{% endif %}</dd>
+        <dt>Region</dt><dd>{{ deal.account.region.label }}</dd>
+        <dt>Value</dt><dd>MYR {{ deal.amount|floatformat:"2g" }}</dd>
+        <dt>Probability</dt><dd>{{ deal.probability }} % (weighted MYR {{ deal.weighted_amount|floatformat:"2g" }})</dd>
+        <dt>Expected close</dt><dd>{{ deal.expected_close|date:"j M Y" }}{% if deal.is_open and deal.expected_close < today %} <span class="chip chip-red">Past due</span>{% endif %}</dd>
+        <dt>Created</dt><dd>{{ deal.created_at|date:"j M Y" }}{% if deal.lead %} from <a href="{% url 'lead' deal.lead.pk %}">a {{ deal.lead.get_source_display|lower }} lead</a>{% endif %}</dd>
+      </dl>
+    </section>
+    {% if assign_form %}
+    <section class="panel" aria-labelledby="assign-heading">
+      <h2 id="assign-heading">Reassign</h2>
+      <p class="muted small">The current owner's open activities on this deal go to the new owner.</p>
+      <form method="post" action="{% url 'opportunity_assign' deal.pk %}">
+        {% csrf_token %}
+        {% include "sales/_field.html" with field=assign_form.owner %}
+        <button class="btn btn-block" type="submit">Assign</button>
+      </form>
+    </section>
+    {% endif %}
+    {% if deal.is_open %}
+    <section class="panel" aria-labelledby="lost-heading">
+      <h2 id="lost-heading">Lost this one?</h2>
+      <form method="post" action="{% url 'opportunity_lost' deal.pk %}" novalidate>
+        {% csrf_token %}
+        {% include "sales/_field.html" with field=lost_form.reason %}
+        {% include "sales/_field.html" with field=lost_form.note %}
+        <button class="btn btn-danger btn-block" type="submit">Mark lost</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

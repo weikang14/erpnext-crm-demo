@@ -1,0 +1,62 @@
+{% extends "sales/base.html" %}
+{% block title %}Pipeline{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div><h1>Pipeline</h1><p class="sub">Open deals by stage. Drag a card, or use its "Move to" control.</p></div>
+  <div class="actions"><a class="btn" href="{% url 'opportunities' %}">List view</a></div>
+</div>
+
+{% if is_manager %}
+<form class="filters panel" method="get" aria-label="Filter the board">
+  <div class="field">
+    <label for="id_owner">Owner</label>
+    <select name="owner" id="id_owner">
+      <option value="">Whole team</option>
+      {% for u in owners %}<option value="{{ u.pk }}"{% if u.pk|stringformat:"s" == owner %} selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label for="id_region">Region</label>
+    <select name="region" id="id_region">
+      <option value="">All regions</option>
+      {% for value, label in regions %}<option value="{{ value }}"{% if value == region %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="actions"><button class="btn" type="submit">Filter</button>{% if owner or region %}<a class="btn btn-quiet" href="{% url 'pipeline' %}">Clear</a>{% endif %}</div>
+</form>
+{% endif %}
+
+<div class="board">
+  {% for column in columns %}
+  <section class="column" data-stage="{{ column.stage }}" aria-labelledby="col-{{ column.stage }}">
+    <header class="column-head">
+      <h2 id="col-{{ column.stage }}">{{ column.label }}</h2>
+      <p class="column-sum"><span>{{ column.count }} deal{{ column.count|pluralize }}</span> <span class="num">MYR {{ column.value|floatformat:"2g" }}</span></p>
+      <p class="column-prob">{{ column.probability }} % likely</p>
+    </header>
+    <div class="cards">
+      {% for deal in column.cards %}
+      <article class="deal-card" draggable="true" aria-labelledby="deal-{{ deal.pk }}">
+        <h3 id="deal-{{ deal.pk }}"><a href="{% url 'opportunity' deal.pk %}">{{ deal.title }}</a></h3>
+        <p class="deal-account">{{ deal.account.name }}</p>
+        <p class="deal-value">MYR {{ deal.amount|floatformat:"2g" }}</p>
+        <p class="deal-meta">Close {{ deal.expected_close|date:"j M" }}{% if deal.expected_close < today %} <span class="chip chip-red">Past due</span>{% endif %}{% if is_manager %} · {{ deal.owner.get_full_name|default:deal.owner.username }}{% endif %}</p>
+        <p class="deal-ind">{% include "sales/_indicator.html" %}</p>
+        <form class="moveform" method="post" action="{% url 'opportunity_move' deal.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <label class="visually-hidden" for="move-{{ deal.pk }}">Move {{ deal.title }} to</label>
+          <select name="stage" id="move-{{ deal.pk }}" class="control">
+            {% for value, label in move_form.fields.stage.choices %}<option value="{{ value }}"{% if value == deal.stage %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-small" type="submit">Move<span class="visually-hidden"> {{ deal.title }}</span></button>
+        </form>
+      </article>
+      {% empty %}
+      <p class="column-empty">No deals in {{ column.label|lower }}.</p>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

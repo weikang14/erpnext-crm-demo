@@ -1,0 +1,26 @@
+{% extends "sales/base.html" %}
+{% block title %}Request a quote{% endblock %}
+{% block content %}
+<section class="public panel">
+  <p class="public-brand">Ombak Metal Works</p>
+  <h1>Request a quote</h1>
+  <p class="muted">Cable trays, machine guards, racking, brackets and frames, made in Senai, Johor. Tell us what you need and the sales engineer for your area will reply within one working day.</p>
+  {% if limited %}
+  <p class="msg msg-error" role="alert">We have received several enquiries from your network in the last hour. Please call us on +60 7-599 0000 instead.</p>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="formgrid">
+      {% for field in form %}
+        {% if field.name == "website" %}
+        <div class="hp" aria-hidden="true">{{ field.label_tag }}{{ field }}</div>
+        {% else %}
+        <div{% if field.name == "notes" or field.name == "interest" %} class="wide"{% endif %}>{% include "sales/_field.html" %}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary" type="submit">Send enquiry</button>
+  </form>
+  <p class="muted small">We use these details only to answer your enquiry.</p>
+</section>
+{% endblock %}

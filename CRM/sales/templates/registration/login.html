@@ -1,0 +1,21 @@
+{% extends "sales/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<section class="signin panel">
+  <h1>Ombak <span class="accent">CRM</span></h1>
+  <p class="muted">Sales team sign-in</p>
+  {% if locked %}
+  <p class="msg msg-error" role="alert">Too many attempts for this username. Try again in 15 minutes.</p>
+  {% elif form.non_field_errors %}
+  <p class="msg msg-error" role="alert">Wrong username or password.</p>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% include "sales/_field.html" with field=form.username %}
+    {% include "sales/_field.html" with field=form.password %}
+    <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+  </form>
+  <p class="muted small">New customer enquiry? <a href="/enquiry/">Use the enquiry form</a>.</p>
+</section>
+{% endblock %}

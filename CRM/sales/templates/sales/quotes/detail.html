@@ -1,0 +1,114 @@
+{% extends "sales/base.html" %}
+{% block title %}{{ quote.number }}{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <div>
+    <p class="crumbs"><a href="{% url 'opportunity' deal.pk %}">{{ deal.title }}</a></p>
+    <h1>{{ quote.number }} {% with q=quote %}{% include "sales/quotes/_status.html" %}{% endwith %}</h1>
+    <p class="sub">{{ deal.account.name }} · valid until {{ quote.valid_until|date:"j M Y" }} · by {{ quote.created_by.get_full_name|default:quote.created_by.username }}{% if quote.approved_by %} · approved by {{ quote.approved_by.get_full_name|default:quote.approved_by.username }}{% endif %}</p>
+  </div>
+  <div class="actions">
+    {% if printable %}<a class="btn" href="{% url 'quote_print' quote.pk %}">Print / PDF</a>{% endif %}
+    {% if quote.status == "approved" and deal.is_open %}
+    <form method="post" action="{% url 'quote_action' quote.pk 'send' %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Mark as sent</button></form>
+    {% elif quote.status == "sent" and deal.is_open %}
+    <form method="post" action="{% url 'quote_action' quote.pk 'revise' %}">{% csrf_token %}<button class="btn" type="submit">Revise</button></form>
+    {% endif %}
+  </div>
+</div>
+
+{% if quote.status == "draft" and quote.decision_note %}
+<p class="msg msg-warning" role="status">Sent back by the sales manager: {{ quote.decision_note }}</p>
+{% elif quote.decision_note %}
+<p class="msg">Manager's note: {{ quote.decision_note }}</p>
+{% endif %}
+{% if quote.status == "pending" and not is_manager %}
+<p class="msg msg-warning" role="status">Waiting for the sales manager: a line has more than {{ limit|floatformat }} % discount.</p>
+{% endif %}
+
+<div class="grid grid-2">
+  <div>
+    <section class="panel" aria-labelledby="lines-heading">
+      <h2 id="lines-heading">Lines</h2>
+      {% if lines %}
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr><th scope="col">Product</th><th scope="col" class="num">Qty</th><th scope="col" class="num">List price</th><th scope="col" class="num">Discount</th><th scope="col" class="num">Line total (MYR)</th>{% if quote.editable %}<th scope="col"><span class="visually-hidden">Remove</span></th>{% endif %}</tr></thead>
+          <tbody>
+            {% for line in lines %}
+            <tr>
+              <td><strong>{{ line.product.item_code }}</strong> {{ line.product.name }}</td>
+              <td class="num">{{ line.qty|floatformat:"-2g" }} {{ line.product.uom }}</td>
+              <td class="num">{{ line.unit_price|floatformat:"2g" }}</td>
+              <td class="num">{{ line.discount_pct|floatformat:"-2" }} %{% if line.needs_approval %} <span class="chip chip-amber">over {{ limit|floatformat }} %</span>{% endif %}</td>
+              <td class="num">{{ line.total|floatformat:"2g" }}</td>
+              {% if quote.editable %}
+              <td><form method="post" action="{% url 'quote_line_delete' quote.pk line.pk %}">{% csrf_token %}<button class="btn btn-small btn-quiet" type="submit">Remove<span class="visually-hidden"> {{ line.product.item_code }}</span></button></form></td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot><tr><td colspan="4">Total, excluding SST</td><td class="num">MYR {{ total|floatformat:"2g" }}</td>{% if quote.editable %}<td></td>{% endif %}</tr></tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty"><strong>No lines yet</strong>Add a product below; the price comes from the price list.</div>
+      {% endif %}
+
+      {% if quote.editable %}
+      <form method="post" action="{% url 'quote_line_add' quote.pk %}" class="lineform" novalidate>
+        {% csrf_token %}
+        {% include "sales/_field.html" with field=line_form.product %}
+        {% include "sales/_field.html" with field=line_form.qty %}
+        {% include "sales/_field.html" with field=line_form.discount_pct %}
+        <div class="form-actions"><button class="btn" type="submit">Add line</button></div>
+      </form>
+      {% endif %}
+    </section>
+  </div>
+
+  <div>
+    {% if quote.editable %}
+    <section class="panel" aria-labelledby="finish-heading">
+      <h2 id="finish-heading">Finish the quote</h2>
+      {% if needs_approval and not is_manager %}
+      <p class="small">A line is above {{ limit|floatformat }} % discount, so the sales manager has to approve this quote before it can go out.</p>
+      {% else %}
+      <p class="small">Within your discount limit: the quote is ready to send as soon as you finish it.</p>
+      {% endif %}
+      <form method="post" action="{% url 'quote_action' quote.pk 'submit' %}">
+        {% csrf_token %}
+        <input type="hidden" name="revision" value="{{ quote.revision }}">
+        <button class="btn btn-primary btn-block" type="submit"{% if not lines %} disabled{% endif %}>{% if needs_approval and not is_manager %}Send for approval{% else %}Finish quote{% endif %}</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {% if quote.status == "pending" and is_manager %}
+    <section class="panel" aria-labelledby="decide-heading">
+      <h2 id="decide-heading">Your decision</h2>
+      <p class="small">Lines above {{ limit|floatformat }} % are marked. Rejecting sends the quote back to the rep as a draft with your note.</p>
+      <form method="post" action="{% url 'quote_action' quote.pk 'approve' %}" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="revision" value="{{ quote.revision }}">
+        {% include "sales/_field.html" with field=decision_form.note %}
+        <div class="form-actions">
+          <button class="btn btn-success" type="submit">Approve</button>
+          <button class="btn btn-danger" type="submit" formaction="{% url 'quote_action' quote.pk 'reject' %}">Reject</button>
+        </div>
+      </form>
+    </section>
+    {% endif %}
+
+    <section class="panel" aria-labelledby="deal-heading">
+      <h2 id="deal-heading">Deal</h2>
+      <dl class="details">
+        <dt>Deal</dt><dd><a href="{% url 'opportunity' deal.pk %}">{{ deal.title }}</a></dd>
+        <dt>Stage</dt><dd>{{ deal.get_stage_display }}</dd>
+        <dt>Customer</dt><dd><a href="{% url 'account' deal.account_id %}">{{ deal.account.name }}</a></dd>
+        <dt>Rep</dt><dd>{{ deal.owner.get_full_name|default:deal.owner.username }}</dd>
+      </dl>
+    </section>
+  </div>
+</div>
+{% endblock %}

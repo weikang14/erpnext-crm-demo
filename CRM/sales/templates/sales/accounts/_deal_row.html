@@ -1,0 +1,7 @@
+<tr>
+  <td><a href="{% url 'opportunity' deal.pk %}">{{ deal.title }}</a></td>
+  <td>{% include "sales/_stage.html" %}</td>
+  <td>{{ deal.owner.get_full_name|default:deal.owner.username }}</td>
+  <td class="num">{{ deal.amount|floatformat:"2g" }}</td>
+  <td class="num">{{ deal.expected_close|date:"j M Y" }}</td>
+</tr>
