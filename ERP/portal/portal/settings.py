@@ -11,7 +11,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-demo-only-not-secret")
 DEBUG = os.environ.get("DJANGO_DEBUG") == "1"
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
-# ERPNext REST API (see .specship/specs/002-shopfloor-terminal/artifacts/api-contract.md)
+# ERPNext REST API (see .specship/completed/002-shopfloor-terminal/artifacts/api-contract.md)
 ERPNEXT_URL = os.environ.get("ERPNEXT_URL", "http://backend:8000")
 ERPNEXT_SITE = os.environ.get("ERPNEXT_SITE", "localhost")
 ERPNEXT_API_KEY = os.environ.get("ERPNEXT_API_KEY", "")

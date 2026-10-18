@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from sales import access, rules
-from sales.models import Activity, Lead, Quote, is_manager
+from sales.models import Activity, Lead, Opportunity, Quote, is_manager
 from sales.views.opportunities import decorate, with_next_due
 
 
@@ -34,6 +34,7 @@ def my_day(request):
         "won_this_month": access.opportunities(user).filter(
             stage=rules.WON, closed_at__date__gte=today.replace(day=1)
         ).aggregate(v=Sum("amount"))["v"] or rules.ZERO,
+        "erp_not_created": access.opportunities(user).filter(Opportunity.erp_not_created(now)),  # one query (AC18)
     }  # fmt: skip
     if is_manager(user):
         context["pending_quotes"] = Quote.objects.filter(status=Quote.Status.PENDING).select_related(

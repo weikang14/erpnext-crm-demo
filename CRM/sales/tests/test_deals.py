@@ -91,10 +91,14 @@ class MoveTests(CRMTestCase):
 
 
 class WonLostTests(CRMTestCase):
+    @property
+    def delivery(self):  # 004 AC1: Won asks for a requested delivery date
+        return {"delivery_date": (timezone.localdate() + timedelta(days=14)).isoformat()}
+
     def test_won_needs_sent_quote(self):  # WON-1
         deal = self.deal(stage="negotiation")
         self.quote(deal, status=Quote.Status.APPROVED)
-        response = self.client.post(reverse("opportunity_won", args=[deal.pk]), follow=True)
+        response = self.client.post(reverse("opportunity_won", args=[deal.pk]), self.delivery, follow=True)
         self.assertContains(response, "Send a quote before marking the deal won.")
         deal.refresh_from_db()
         self.assertTrue(deal.is_open)
@@ -102,7 +106,7 @@ class WonLostTests(CRMTestCase):
     def test_won(self):  # WON-2
         deal = self.deal(stage="negotiation", amount="1")
         quote = self.quote(deal, lines=[(None, "10", "0"), (self.frame, "1", "0")], status=Quote.Status.SENT)
-        self.client.post(reverse("opportunity_won", args=[deal.pk]))
+        self.client.post(reverse("opportunity_won", args=[deal.pk]), self.delivery)
         deal.refresh_from_db()
         quote.refresh_from_db()
         self.assertEqual((deal.stage, deal.amount, quote.status), ("won", Decimal("2300.00"), "accepted"))

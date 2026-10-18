@@ -1,6 +1,6 @@
 """ERPNext REST v2 client: the only module in the portal that does HTTP.
 
-Request and response shapes: .specship/specs/002-shopfloor-terminal/artifacts/api-contract.md
+Request and response shapes: .specship/completed/002-shopfloor-terminal/artifacts/api-contract.md
 """
 
 import html

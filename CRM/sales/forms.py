@@ -1,8 +1,9 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django import forms
 from django.contrib.auth.models import User
 from django.db.models import Q
+from django.utils import timezone
 
 from sales import rules
 from sales.models import Account, Activity, Contact, Lead, LostReason, Opportunity, Product, Stage, display_name
@@ -205,6 +206,30 @@ class MoveForm(forms.Form):
 class LostForm(forms.Form):
     reason = forms.ModelChoiceField(queryset=LostReason.objects.filter(active=True), label="Lost reason")
     note = forms.CharField(max_length=300, required=False, label="What happened?")
+
+
+class WonForm(forms.Form):
+    """The requested delivery date on Won and on a resend (AC1, AC15): a Kuala Lumpur date from today to a year ahead
+    (today + 365 days). Prefilled with the stored date (a resend's) unless there is none or it's out of that range,
+    then two weeks out."""
+
+    delivery_date = forms.DateField(label="Requested delivery date", widget=DateInput)
+
+    def __init__(self, *args, stored=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.today = timezone.localdate()
+        self.latest = self.today + timedelta(days=365)
+        fresh = stored and self.today <= stored <= self.latest
+        self.fields["delivery_date"].initial = stored if fresh else self.today + timedelta(days=14)
+        self.fields["delivery_date"].widget.attrs.update(min=self.today.isoformat(), max=self.latest.isoformat())
+
+    def clean_delivery_date(self):
+        day = self.cleaned_data["delivery_date"]
+        if day < self.today:
+            raise forms.ValidationError("The delivery date can't be before today.")
+        if day > self.latest:
+            raise forms.ValidationError("The delivery date can't be more than a year ahead.")
+        return day
 
 
 def quarter_of(day):

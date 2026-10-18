@@ -6,6 +6,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 
 from sales.forms import quarter_bounds, quarter_of
 from sales.models import Activity, Lead, Opportunity, Quote
@@ -80,6 +81,81 @@ class MyDayTests(CRMTestCase):
             with CaptureQueriesContext(connection) as queries:
                 response = self.client.get(reverse("home"))
             self.assertEqual(len(response.context["stale"]), Opportunity.objects.count())
+            return len(queries)
+
+        self.login(self.manager)
+        self.assertEqual(queries_for(3), queries_for(12))
+
+
+class ErpOrdersNotCreatedTests(CRMTestCase):
+    """004 task 3.3 (test-cases.md DAY-1..6, not 003's): My day's "ERP orders not created" panel (AC18, Clar.)."""
+
+    HEADING = "ERP orders not created"
+
+    def won(self, title, owner=None, **erp):
+        return self.deal(owner=owner, title=title, stage="won", closed_at=timezone.now(), **erp)
+
+    def failed(self, title, owner=None, error="ERPNext didn't answer."):
+        return self.won(title, owner, erp_status="failed", erp_error=error, erp_attempted_at=timezone.now())
+
+    def listed(self):
+        response = self.client.get(reverse("home"))
+        return response, sorted(d.title for d in response.context["erp_not_created"])
+
+    def test_lists_own_failed_sends_with_links_and_reasons(self):  # DAY-1, AC18
+        d1, d2 = self.failed("D1", error="Item FG-CT-300 is disabled"), self.failed("D2")
+        self.won("D3", erp_status="sent", erp_order="SAL-ORD-2026-00020")
+        self.won("D4")
+        response, titles = self.listed()
+        self.assertEqual(titles, ["D1", "D2"])
+        self.assertContains(response, self.HEADING)
+        for deal in (d1, d2):
+            self.assertContains(response, f'href="{deal.get_absolute_url()}"')
+        self.assertContains(response, "Item FG-CT-300 is disabled")
+        self.assertContains(response, escape("ERPNext didn't answer."))
+
+    def test_rep_sees_own_deals_and_the_manager_the_team(self):  # DAY-2, DAY-3
+        self.failed("D1")
+        self.failed("D2")
+        self.failed("Jason's", owner=self.jason)
+        self.assertEqual(self.listed()[1], ["D1", "D2"])
+        self.login(self.manager)
+        response, titles = self.listed()
+        self.assertEqual(titles, ["D1", "D2", "Jason's"])
+        self.assertContains(response, "Jason")
+
+    def test_hidden_when_none(self):  # DAY-4
+        self.won("D4")
+        self.assertNotContains(self.client.get(reverse("home")), self.HEADING)
+
+    def test_resent_deal_leaves_the_panel(self):  # DAY-5
+        deal = self.failed("D1")
+        self.assertEqual(self.listed()[1], ["D1"])
+        deal.record_send(Opportunity.ErpStatus.SENT, "SAL-ORD-2026-00020")
+        response, titles = self.listed()
+        self.assertEqual(titles, [])
+        self.assertNotContains(response, self.HEADING)
+
+    def test_total_mismatch_is_not_listed(self):  # DAY-6, Clar.
+        warning = "ERPNext order SAL-ORD-2026-00020 totals MYR 235.89, the quote MYR 235.88; check it in ERPNext."
+        self.won("D1", erp_status="sent", erp_order="SAL-ORD-2026-00020", erp_error=warning)
+        self.assertEqual(self.listed()[1], [])
+
+    def test_stale_sending_is_listed_fresh_is_not(self):  # Clar. (sending)
+        now = timezone.now()
+        self.won("stale", erp_status="sending", erp_attempted_at=now - timedelta(minutes=3))
+        self.won("fresh", erp_status="sending", erp_attempted_at=now - timedelta(minutes=1))
+        response, titles = self.listed()
+        self.assertEqual(titles, ["stale"])
+        self.assertContains(response, escape("The last send didn't finish; send it again."))
+
+    def test_constant_query_count(self):  # DAY-1, DAY-3, FM12: one query, no N+1
+        def queries_for(n):
+            for i in range(n):
+                self.failed(f"F{n}-{i}", owner=[self.siti, self.kumar, self.jason][i % 3])
+            with CaptureQueriesContext(connection) as queries:
+                response = self.client.get(reverse("home"))
+            self.assertEqual(len(response.context["erp_not_created"]), Opportunity.objects.count())
             return len(queries)
 
         self.login(self.manager)

@@ -21,7 +21,7 @@ const errors = [];
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 
 // real records: an open deal from the board, a draft quote with lines (its editor table has the Remove column),
-// a quote waiting for approval, and a won deal's accepted quote to print
+// a quote waiting for approval, and a won deal (its ERP order panel, 004) with its accepted quote to print
 await page.goto(`${base}/pipeline/`, { waitUntil: "networkidle0" });
 const openDeals = await page.$$eval(".deal-card h3 a", (as) => as.map((a) => a.href));
 const deal = openDeals[0];
@@ -39,28 +39,33 @@ for (const d of openDeals) {
 if (!draft) throw new Error("no draft quote with lines on an open deal: add a line to one first");
 await page.goto(`${base}/approvals/`, { waitUntil: "networkidle0" });
 const quote = await page.$eval("table a[href^='/quotes/']", (a) => a.href);
-await page.goto(`${base}/deals/?stage=won`, { waitUntil: "networkidle0" });
-await page.goto(await page.$eval("table a[href^='/deals/']", (a) => a.href), { waitUntil: "networkidle0" });
+const firstWon = async (q) => {
+  await page.goto(`${base}/deals/?stage=won${q}`, { waitUntil: "networkidle0" });
+  return page.$$eval("table a[href^='/deals/']", (as) => as[0]?.href);
+};
+const won = (await firstWon("&q=VAL-deploy")) || (await firstWon("")); // the deploy check's sent order, if any
+await page.goto(won, { waitUntil: "networkidle0" });
 const accepted = await page.$eval("table a[href^='/quotes/']", (a) => a.href);
 const pages = {
-  home: `${base}/`, pipeline: `${base}/pipeline/`, deal, draft, quote, approvals: `${base}/approvals/`, print: accepted + "print/", reports: `${base}/reports/`,
+  home: `${base}/`, pipeline: `${base}/pipeline/`, deal, won, draft, quote, approvals: `${base}/approvals/`, print: accepted + "print/", reports: `${base}/reports/`,
   leads: `${base}/leads/`, deals: `${base}/deals/?stage=all`, enquiry: `${base}/enquiry/`,
 };
+const mustShow = { won: "#erp-heading" }; // the ERP order panel
 let failures = 0;
 for (const [name, url] of Object.entries(pages)) {
   for (const [w, h] of [[1440, 900], [1024, 768], [390, 844]]) {
     await page.setViewport({ width: w, height: h });
     errors.length = 0;
     const response = await page.goto(url, { waitUntil: "networkidle0" });
-    const m = await page.evaluate(() => {
+    const m = await page.evaluate((must) => {
       const controls = [...document.querySelectorAll("button, select, input:not([type=hidden]):not([type=checkbox]), .btn")]
         .filter((e) => e.offsetParent && !e.closest(".hp"));
       const small = controls.filter((e) => e.getBoundingClientRect().height < 44)
         .map((e) => `${e.tagName}:${(e.textContent || e.name || "").trim().slice(0, 20)}:${Math.round(e.getBoundingClientRect().height)}`);
       return { hScroll: document.documentElement.scrollWidth > innerWidth, small: small.slice(0, 5),
-        focusMoved: document.activeElement !== document.body };
-    });
-    const ok = response.status() === 200 && !m.hScroll && m.small.length === 0 && errors.length === 0 && !m.focusMoved;
+        focusMoved: document.activeElement !== document.body, missing: must && !document.querySelector(must) ? must : undefined };
+    }, mustShow[name]);
+    const ok = response.status() === 200 && !m.hScroll && m.small.length === 0 && errors.length === 0 && !m.focusMoved && !m.missing;
     if (!ok) failures++;
     await page.screenshot({ path: `shot-${name}-${w}x${h}.png`, fullPage: true });
     console.log(ok ? "ok  " : "FAIL", `${name} ${w}x${h}`, JSON.stringify({ status: response.status(), ...m, errors }));
@@ -119,7 +124,7 @@ for (const [name, url, form, spoil, isInvalid] of invalidPosts) {
 }
 await formPage.close();
 
-for (const [name, url] of [["home", pages.home], ["pipeline", pages.pipeline], ["quote", pages.quote]]) {
+for (const [name, url] of [["home", pages.home], ["pipeline", pages.pipeline], ["quote", pages.quote], ["won", pages.won]]) {
   const { lhr } = await lighthouse(url, {
     port: 9334, output: "json", onlyCategories: ["performance", "accessibility", "best-practices"],
     extraHeaders: { Cookie: `sessionid=${sid}` },

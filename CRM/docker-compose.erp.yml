@@ -1,0 +1,18 @@
+# Optional ERPNext link (004): won deals become sales orders in the ERP stack (ERP/docker-compose.yml, project "erp").
+# Start the ERP stack first: web joins its erp_crm_link network, which only the ERP backend shares, to reach backend:8000.
+#   docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d
+# CRM_API_KEY / CRM_API_SECRET are the same variables (and defaults) the ERP compose writes into the site config.
+services:
+  web:
+    environment:
+      ERPNEXT_URL: http://backend:8000
+      ERPNEXT_SITE: ${ERPNEXT_SITE:-localhost}
+      ERPNEXT_API_KEY: ${CRM_API_KEY:-crm-demo-key}
+      ERPNEXT_API_SECRET: ${CRM_API_SECRET:-crm-demo-secret}
+      ERPNEXT_DESK_URL: ${ERPNEXT_DESK_URL:-http://localhost:8080}
+    networks: [default, erp]
+
+networks:
+  erp:
+    external: true
+    name: erp_crm_link

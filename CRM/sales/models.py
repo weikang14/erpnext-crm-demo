@@ -13,6 +13,8 @@ from sales.regions import Region, State, region_of
 from sales.rules import RuleError
 
 MANAGER_GROUP = "Sales Manager"
+SEND_STALE_AFTER = timedelta(minutes=2)  # a `sending` claim older than this is taken to have died (AC15)
+STALE_SEND = "The last send didn't finish; send it again."
 
 
 def is_manager(user):
@@ -219,6 +221,12 @@ class Stage(models.TextChoices):
 
 
 class Opportunity(models.Model):
+    class ErpStatus(models.TextChoices):
+        NOT_SENT = "not_sent", "Not sent"
+        SENDING = "sending", "Sending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
     title = models.CharField(max_length=200)
     account = models.ForeignKey(Account, models.PROTECT, related_name="opportunities")
     contact = models.ForeignKey(Contact, models.SET_NULL, null=True, blank=True, related_name="+")
@@ -231,6 +239,12 @@ class Opportunity(models.Model):
     closed_at = models.DateTimeField(null=True, blank=True)
     last_activity_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(default=timezone.now)
+    delivery_date = models.DateField("requested delivery date", null=True, blank=True)
+    erp_status = models.CharField("ERP order", max_length=10, choices=ErpStatus.choices, default=ErpStatus.NOT_SENT)
+    # not unique: ERPNext names orders per site; its unique crm_reference is the duplicate guard (AC11, AC13)
+    erp_order = models.CharField("ERPNext sales order", max_length=140, null=True, blank=True)
+    erp_error = models.TextField(blank=True)
+    erp_attempted_at = models.DateTimeField("last ERP send", null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "opportunities"
@@ -282,14 +296,52 @@ class Opportunity(models.Model):
         self.refresh_from_db()
 
     @transaction.atomic
-    def mark_won(self, by):
+    def mark_won(self, by, delivery_date=None):
         deal = self._locked()
         quote = deal.sent_quote()
         rules.check_won(deal.stage, quote is not None)
         quote.status = Quote.Status.ACCEPTED
         quote.save(update_fields=["status"])
-        deal._set_stage(Stage.WON, by, amount=quote.total, closed_at=timezone.now())
+        deal._set_stage(Stage.WON, by, amount=quote.total, closed_at=timezone.now(), delivery_date=delivery_date)
         self.refresh_from_db()
+
+    def claim_send(self, now):
+        """Take a won deal for one ERPNext send (AC15): one conditional UPDATE, only from not sent, failed, or a
+        `sending` older than SEND_STALE_AFTER. Call it outside a transaction, so the claim is committed and no row
+        lock is held while ERPNext answers. True if this call claimed it."""
+        status = Opportunity.ErpStatus
+        claimable = Q(erp_status=status.NOT_SENT) | Opportunity.erp_not_created(now)
+        claimed = Opportunity.objects.filter(claimable, pk=self.pk, stage=Stage.WON).update(
+            erp_status=status.SENDING, erp_attempted_at=now
+        )
+        if claimed:
+            self.erp_status, self.erp_attempted_at = status.SENDING, now
+        return bool(claimed)
+
+    @staticmethod
+    def erp_not_created(now):
+        """Deals whose order didn't reach ERPNext and wants a resend (Clar.): failed sends, and `sending` claims older
+        than SEND_STALE_AFTER, which died. A sent deal with a total mismatch is not one of them."""
+        status = Opportunity.ErpStatus
+        return Q(erp_status=status.FAILED) | Q(erp_status=status.SENDING, erp_attempted_at__lt=now - SEND_STALE_AFTER)
+
+    def erp_state(self, now):
+        """erp_status as the ERP panel shows it: a stale `sending` (as erp_not_created) is failed."""
+        status = Opportunity.ErpStatus
+        attempted = self.erp_attempted_at
+        if self.erp_status == status.SENDING and attempted and attempted < now - SEND_STALE_AFTER:
+            return status.FAILED
+        return self.erp_status
+
+    @property
+    def erp_reason(self):
+        """Why a failed or stale `sending` deal's order isn't in ERPNext."""
+        return STALE_SEND if self.erp_status == Opportunity.ErpStatus.SENDING else self.erp_error
+
+    def record_send(self, status, order="", error=""):
+        """Store a send's outcome: a plain update of the ERP fields only, no lock (AC11). No order is stored as NULL."""
+        self.erp_status, self.erp_order, self.erp_error = status, order or None, error
+        self.save(update_fields=["erp_status", "erp_order", "erp_error"])
 
     @transaction.atomic
     def mark_lost(self, by, reason, note=""):

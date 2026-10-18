@@ -1,5 +1,6 @@
 import csv
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Min, Q, Sum
@@ -8,9 +9,9 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from sales import access, rules
-from sales.forms import ActivityForm, AssignForm, DealFilter, DealForm, LostForm, MoveForm, active_reps
-from sales.models import Quote, Stage, display_name, is_manager
+from sales import access, erp, erpnext, rules
+from sales.forms import ActivityForm, AssignForm, DealFilter, DealForm, LostForm, MoveForm, WonForm, active_reps
+from sales.models import Opportunity, Quote, Stage, display_name, is_manager
 from sales.regions import Region, states_in
 from sales.rules import RuleError
 from sales.views import back, page_of
@@ -101,9 +102,13 @@ def pipeline(request):
 
 
 def detail_context(request, deal, **forms):
-    today = timezone.localdate()
+    today, now = timezone.localdate(), timezone.now()
     deal.next_due = deal.activities.filter(done=False).aggregate(d=Min("due_date"))["d"]
-    decorate([deal], today, timezone.now())
+    decorate([deal], today, now)
+    erp_configured, erp_state = erpnext.client_from_settings() is not None, deal.erp_state(now)
+    status = Opportunity.ErpStatus
+    # no owner/manager check: whoever sees this page got it through access.opportunities, the send route's scope
+    can_send = deal.stage == Stage.WON and erp_configured and erp_state in (status.NOT_SENT, status.FAILED)
     return {
         "deal": deal,
         "quotes": deal.quotes.prefetch_related("lines").select_related("created_by", "approved_by"),
@@ -113,9 +118,14 @@ def detail_context(request, deal, **forms):
         "history": deal.history.select_related("by"),
         "move_form": MoveForm(initial={"stage": deal.stage}),
         "lost_form": LostForm(),
+        "won_form": WonForm() if deal.is_open else None,
         "activity_form": ActivityForm(),
         "today": today,
         "assign_form": AssignForm(initial={"owner": deal.owner}) if deal.is_open and is_manager(request.user) else None,
+        "erp_configured": erp_configured,
+        "erp_state": erp_state,
+        "erp_desk_url": (getattr(settings, "ERPNEXT_DESK_URL", "") or "").rstrip("/"),
+        "send_form": WonForm(stored=deal.delivery_date) if can_send else None,
     } | forms
 
 
@@ -147,11 +157,41 @@ def deal_move(request, pk):
 @require_POST
 def deal_won(request, pk):
     deal = access.get(access.opportunities, request.user, pk)
+    form = WonForm(request.POST)
+    if not form.is_valid() and deal.is_open:  # a closed deal's page has no date field: mark_won says it's closed
+        return render(request, "sales/deals/detail.html", detail_context(request, deal, won_form=form), status=400)
     try:
-        deal.mark_won(request.user)
-        messages.success(request, f"Won: {deal.title}, MYR {deal.amount:,.2f}.")
+        deal.mark_won(request.user, form.cleaned_data.get("delivery_date"))
     except RuleError as error:
         messages.error(request, str(error))
+        return redirect(deal)
+    messages.success(request, f"Won: {deal.title}, MYR {deal.amount:,.2f}.")
+    # Won has committed; the order goes out now, outside its transaction, and send_order never raises (AC2, AC3)
+    flash(request, erp.send_order(deal, erpnext.client_from_settings(), timezone.localdate()))
+    return redirect(deal)
+
+
+def flash(request, outcome):
+    """A send's outcome at its level; none when the ERP link isn't configured. An ERPNext refusal also says the deal
+    stays won and what to do; erp_error and the panel keep ERPNext's reason alone."""
+    if outcome.level:
+        text = outcome.message
+        if outcome.status == Opportunity.ErpStatus.FAILED and text not in erp.OWN_REASONS:
+            text = erp.NOT_TAKEN.format(text if text[-1:] in ".!?" else f"{text}.")
+        messages.add_message(request, getattr(messages, outcome.level.upper()), text)
+
+
+@login_required
+@require_POST
+def deal_erp_send(request, pk):
+    """Send a won deal's order (again) with the date entered (AC15). The scope makes it the owner's or the manager's:
+    another rep gets 404. Already sent, not won and a fresh `sending` are refused by send_order's claim."""
+    deal = access.get(access.opportunities, request.user, pk)
+    form = WonForm(request.POST)
+    if not form.is_valid() and deal.stage == Stage.WON and deal.erp_status != Opportunity.ErpStatus.SENT:
+        return render(request, "sales/deals/detail.html", detail_context(request, deal, send_form=form), status=400)
+    day = form.cleaned_data.get("delivery_date")  # None when invalid: the claim refuses this deal anyway
+    flash(request, erp.send_order(deal, erpnext.client_from_settings(), timezone.localdate(), delivery_date=day))
     return redirect(deal)
 
 

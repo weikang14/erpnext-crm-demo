@@ -1,12 +1,14 @@
-# Ombak Metal Works: factory ERP and sales CRM demo
+# ERPNext + Django CRM: factory ERP, shop-floor terminal and sales CRM demo
 
 [中文说明](#中文说明)
 
-Ombak Metal Works Sdn Bhd is a **fictional** make-to-order sheet-metal fabricator in Johor.
+The demo company, Ombak Metal Works Sdn Bhd, is a **fictional** make-to-order sheet-metal
+fabricator in Johor.
 This repo implements its ERP on **ERPNext v16**, adds a custom Frappe app, `ombak_mfg`, for
 the things a production manager needs that ERPNext doesn't ship with, and a **Django
 shop-floor terminal** that operators use on a tablet, talking to ERPNext only through its
-REST API. The sales team works in a separate **Django sales CRM**.
+REST API. The sales team works in a separate **Django sales CRM**, and a won deal becomes an
+ERPNext sales order.
 
 Part 1 of 3: **ERP** (`ERP/`: ERPNext + `ombak_mfg` + the Django terminal) → part 2
 **CRM** (Django + PostgreSQL, `CRM/`, [below](#sales-crm-django)) → part 3 **integration**
@@ -59,7 +61,7 @@ updates only work there).
 
 Both ports are bound to `127.0.0.1`, so nothing is reachable from your network.
 
-- **Tests:** `bash ERP/scripts/test.sh` (32 ERPNext integration tests on a separate `test.localhost` site) and `bash ERP/scripts/test-portal.sh` (63 Django tests, including live contract tests against a separate `contract.localhost` ERPNext site). The demo data is never touched.
+- **Tests:** `bash ERP/scripts/test.sh` (50 ERPNext integration tests on a separate `test.localhost` site) and `bash ERP/scripts/test-portal.sh` (63 Django tests, including live contract tests against a separate `contract.localhost` ERPNext site). The demo data is never touched.
 - **Start over:** demo dates are relative to the day you generate them. `docker compose down -v`, then run the three commands above again.
 - **Trigger the alert now** instead of waiting for the daily job: `docker compose exec backend bench --site localhost execute ombak_mfg.tasks.notify_overdue_work_orders`.
 - **After editing app code:** `docker compose restart backend` (nginx and the websocket follow it); after editing terminal code, `docker compose restart portal`. To edit DocTypes in the UI, first run `bench --site localhost set-config developer_mode 1` so changes are written back into the app.
@@ -158,12 +160,12 @@ with auto-refresh.
 
 ## Sales CRM (Django)
 
-The sales team's own system (`CRM/`, Django 6.1 on PostgreSQL 17), separate from the ERP
-for now. Web enquiries become leads that go to the rep for the customer's region. Leads
+The sales team's own system (`CRM/`, Django 6.1 on PostgreSQL 17), a separate app from the
+ERP. Web enquiries become leads that go to the rep for the customer's region. Leads
 become deals that move through the factory's stages. Quotes come from the price list, and
 big discounts need the sales manager. Every deal ends won, or lost with a reason. The
-product codes and prices are the ERPNext items, so part 3 can turn a won deal into an
-ERPNext sales order without mapping.
+product codes and prices are the ERPNext items, and a won deal becomes an ERPNext sales
+order ([part 3](#crm--erpnext-sales-orders-part-3)).
 
 ```mermaid
 flowchart LR
@@ -176,14 +178,14 @@ flowchart LR
     M -->|no, with a note| Q
     Q -->|≤ 10 %| S
     S --> WON[Won] & LOST[Lost + reason]
-    WON -. part 3 .-> SO[ERPNext sales order]
+    WON -->|part 3| SO[ERPNext sales order]
 ```
 
 ```bash
 cd CRM
 docker compose up -d --build                       # PostgreSQL + Django on http://localhost:8082
 docker compose exec web python manage.py seed_demo  # team, products, 16 accounts, ~50 deals over 5 quarters
-bash scripts/test.sh                                # 155 tests on PostgreSQL
+bash scripts/test.sh                                # 331 tests on PostgreSQL (17 live ERPNext tests skip here)
 ```
 
 | Login (local demo only, `Sales@2026`) | Role | Region |
@@ -276,7 +278,8 @@ The public enquiry form is at **http://localhost:8082/enquiry/** (no sign-in).
 | `reports.py` | the four reports as aggregate queries |
 | `views/` | My day, sign-in, leads, enquiry, accounts, activities, deals and board, quotes, reports |
 | `management/commands/seed_demo.py` | idempotent demo data relative to today |
-| `tests/` | 155 tests covering every case in `.specship/completed/003-django-crm/artifacts/test-cases.md` |
+| `erpnext.py`, `erp.py` | the ERPNext link (part 3): REST client; mapping and the send flow |
+| `tests/` | 331 tests covering every case in the 003 and 004 test plans under `.specship/completed/` |
 
 Settings come from environment variables with local-demo defaults (`CRM/docker-compose.yml`):
 `CRM_SECRET_KEY`, `CRM_DB_PASSWORD`, `CRM_DEMO_PASSWORD`. `CRM/scripts/ui-probe/` checks
@@ -287,7 +290,7 @@ button. To clear one user's lock:
 `docker compose exec web python manage.py shell -c "from sales import ratelimit; ratelimit.clear('login', 'hafiz')"`.
 
 **Limits:**
-- MYR only, and prices exclude SST (ERPNext adds tax on the order).
+- MYR only, and quotes exclude SST (the ERPNext order adds it for Malaysian customers, part 3).
 - One approval level.
 - No email or calendar sync, attachments or custom fields.
 - Closed deals can't be reopened.
@@ -309,6 +312,100 @@ button. To clear one user's lock:
 |---|---|
 | ![Deal edit](CRM/docs/screenshots/crm-deal-edit.png) | ![My day on a phone](CRM/docs/screenshots/crm-my-day-phone.png) |
 
+## CRM → ERPNext sales orders (part 3)
+
+When a rep marks a deal **Won**, the CRM creates a **submitted sales order** in ERPNext in
+the same request, so the production manager can plan from it straight away. The two systems
+stay separate: the CRM talks to ERPNext only through its REST API, as the terminal does.
+
+```mermaid
+flowchart LR
+    W[Mark won<br/>+ requested delivery date] --> C[Won saved]
+    C --> L{Order with this<br/>quote number<br/>in ERPNext?}
+    L -->|yes| A[Adopt it]
+    L -->|no| CU[Find or create<br/>the customer + address] --> SO[Sales order draft] --> SUB[Submit:<br/>To Deliver and Bill]
+    A & SUB --> P[Deal page:<br/>ERP order panel]
+```
+
+```bash
+cd ERP && docker compose up -d          # start ERP first: it creates the erp_crm_link network
+cd ../CRM
+docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d --build
+bash scripts/test-erp.sh                # 17 live contract tests on the separate contract.localhost site
+```
+
+Without the override (`docker-compose.erp.yml`) the CRM runs on its own as in part 2, and won
+deals say "ERP link not configured". An ERP site created before part 3 needs the CRM user
+and keys once: `docker compose exec backend bench --site localhost set-config crm_api_key crm-demo-key`,
+the same for `crm_api_secret` (`crm-demo-secret`), then
+`docker compose exec backend bench --site localhost execute ombak_mfg.setup.masters.setup_masters`.
+
+**What happens on Won**
+- **Won is never lost.** Won is saved first; the order is sent right after (10 s limit). If
+  ERPNext is down or refuses, the deal stays won and its **ERP order** panel shows the reason
+  and a **Send again** form. Older won deals can be sent from the same panel.
+- **No duplicate orders.** The quote number goes into the order's `crm_reference` field,
+  which is unique in ERPNext. Every send looks it up first and adopts an order that already
+  exists. A conditional "sending" claim stops two clicks from sending twice.
+- **Customer:** found by exact name, or created (Company, group Commercial, territory
+  Malaysia or Singapore from the account's state, SSM/UEN number as tax ID). A billing
+  address is added when the account has an address and a city.
+- **Exact total:** lines go at the quote's list price and the quote's discounts as one
+  header discount, with rounding to whole ringgit off. The order's net total equals the quote
+  to the sen. If ERPNext's total differs anyway, the panel says "Sent, total differs".
+- **SST:** Malaysian customers' orders carry the template "Malaysia SST - OMW" (10 %, an
+  assumption: some steel products are 5 % by tariff code; the rate lives only in that
+  template). Singapore customers' orders carry no tax (assumed exported under K2).
+- **Delivery date:** required at Won, default today + 14 days (Kuala Lumpur), from today to
+  365 days ahead.
+- **Who sends:** the deal owner or the manager. **My day** lists failed sends under "ERP
+  orders not created" (the manager sees the team's).
+- **Least privilege:** the ERPNext role *CRM Integration* creates sales orders, and reads,
+  changes and submits only the ones it created (`if_owner`). It also reads and creates
+  customers, creates and reads addresses, and reads items and the tax template. It cannot
+  cancel or delete orders or touch invoices, work orders or job cards (tests prove each
+  refusal). The CRM container shares a network only with the ERPNext backend, not with Redis
+  or MariaDB.
+
+Settings (`CRM/docker-compose.erp.yml`): `CRM_API_KEY` / `CRM_API_SECRET` are the same
+variables for both stacks; the defaults `crm-demo-key` / `crm-demo-secret` are for a laptop
+demo only, so change them in `ERP/.env` and `CRM/.env` for anything else. `ERPNEXT_SITE`
+(default `localhost`); `ERPNEXT_DESK_URL` (the panel's link to the order, default
+http://localhost:8080). Code: `CRM/sales/erpnext.py` (REST client), `CRM/sales/erp.py`
+(mapping and the send flow), and on the ERP side `ombak_mfg/setup/masters.py` (role, user,
+`crm_reference`, SST).
+
+**Known issues and limits**
+- ERPNext's `/printview` page lets the integration key read any sales order, because its
+  website permission check ignores `if_owner`. It can only read, not change. Accepted
+  (medium severity).
+- Amending a cancelled order in ERPNext copies `crm_reference`, so the amendment is refused
+  as a duplicate. Editing ERP orders is out of scope.
+- Products are whole units (Nos): a quote line with a fractional quantity fails to send,
+  with ERPNext's reason on the deal.
+- If the ERP backend container is recreated (not just restarted), recreate the websocket
+  too: `docker compose up -d --force-recreate websocket`. It shares the backend's network.
+- Two different deals for the same new account, sent at the same instant, can create two
+  ERPNext customers.
+- A draft order found by the lookup is submitted with its original dates.
+- Resending with an invalid date while another send is still running answers with the date
+  error (400), not "already sending".
+- Nothing syncs back: cancelling or changing the order in ERPNext doesn't show in the CRM.
+  No automatic retries.
+- Quote numbers come from the CRM database, so after a CRM reseed an old ERPNext order with
+  the same number would be adopted.
+
+| ERP order panel on a won deal | Won with a delivery date |
+|---|---|
+| ![ERP order panel](CRM/docs/screenshots/crm-erp-order.png) | ![Won form](CRM/docs/screenshots/crm-won-delivery-date.png) |
+
+The same order in ERPNext Desk: submitted (To Deliver and Bill), net total 235.88 as quoted,
+one SST row, created by the CRM Integration user.
+
+![Sales order in ERPNext Desk](ERP/docs/screenshots/erpnext-sales-order.png)
+
+![Sales order totals and activity](ERP/docs/screenshots/erpnext-sales-order-totals.png)
+
 ## Demo video click path
 
 1. **Ombak Factory** workspace: the 3 number cards and the report shortcuts.
@@ -325,6 +422,7 @@ button. To clear one user's lock:
 12. Convert it → **Pipeline**: move the new deal with its "Move to" control; moving it to Quotation is refused until a quote is sent.
 13. **New quote** with a 15 % line → **Finish the quote** → sign in as `hafiz` → **Approvals** → approve → back as `siti`: **Mark as sent**, then **Mark won**.
 14. `hafiz` → **Reports**: the won deal in the win rate and forecast; **My day** shows the team's deals with no next step.
+15. With the ERP link on: at step 13, **Mark won** with the suggested delivery date → "Sales order SAL-ORD-… created in ERPNext." → the deal's **ERP order** panel → its link opens the order in Desk: To Deliver and Bill, with the SST row and the quote number in `crm_reference`.
 
 ## Design decisions and limits
 
@@ -382,7 +480,7 @@ ERPNext 打开 **http://localhost:8080**，平板页打开 **http://localhost:80
 | `lim.weijie@ombakmetal.example` | `Ombak@2026` | 生产主管（会收到逾期提醒） |
 | 平板页：`ahmad`、`meiling`、`rajesh`、`nurul` | `Operator@2026` | 操作员（默认工作站：激光切割、折弯、焊接、喷涂） |
 
-- **测试**：`bash ERP/scripts/test.sh`（ERPNext 32 个测试）和 `bash ERP/scripts/test-portal.sh`（Django 63 个测试，其中包括对真实 ERPNext 测试站点的合约测试），都不会动到演示数据。
+- **测试**：`bash ERP/scripts/test.sh`（ERPNext 50 个测试）和 `bash ERP/scripts/test-portal.sh`（Django 63 个测试，其中包括对真实 ERPNext 测试站点的合约测试），都不会动到演示数据。
 - **重来**：`docker compose down -v`，然后重新执行上面四条命令。
 
 ### 报表规则
@@ -402,7 +500,7 @@ ERPNext 打开 **http://localhost:8080**，平板页打开 **http://localhost:80
 
 ### 销售 CRM（Django）
 
-销售团队自己的系统（`CRM/`，Django 6.1 + PostgreSQL 17），暂时和 ERP 分开。
+销售团队自己的系统（`CRM/`，Django 6.1 + PostgreSQL 17），和 ERP 是两个独立的应用；成交的商机会在 ERPNext 建销售订单（见第三部分）。
 
 - **线索**：网站询价会分给该地区里未跟进线索最少的业务员；业务员自己录入的线索归自己。
 - **商机**：按工厂的阶段推进：询价 → 技术评估 / 打样 → 报价 → 议价。没有发出报价，不能进入报价阶段，也不能成交；丢单必须选原因。
@@ -421,7 +519,7 @@ ERPNext 打开 **http://localhost:8080**，平板页打开 **http://localhost:80
 cd CRM
 docker compose up -d --build                       # http://localhost:8082
 docker compose exec web python manage.py seed_demo  # 演示数据
-bash scripts/test.sh                                # 155 个测试
+bash scripts/test.sh                                # 331 个测试（其中 17 个连 ERPNext 的测试在这里跳过）
 ```
 
 账号（密码都是 `Sales@2026`）：`hafiz` 是销售经理；`aisyah`（北区）、`kumar` 和 `jason`（中区）、`siti`（南区）、`weiling`（新加坡）是业务员。公开询价表单在 **http://localhost:8082/enquiry/**，不用登录。
@@ -438,13 +536,52 @@ bash scripts/test.sh                                # 155 个测试
   - Lighthouse 100/100/100。
 - **被锁住了？** 系统里没有解锁按钮，可以用这条命令解除某个用户的锁定：`docker compose exec web python manage.py shell -c "from sales import ratelimit; ratelimit.clear('login', 'hafiz')"`。
 - **限制**：
-  - 只用马币，价格不含 SST。
+  - 只用马币，报价不含 SST（马来西亚客户的 ERPNext 订单会加上，见第三部分）。
   - 只有一级审批。
   - 没有邮件和日历同步，也不能上传附件。
   - 结案的商机不能重新打开。
   - 商机的修改和改派不留历史记录。
   - 报价被批准或驳回时，业务员不会收到通知。
   - 本地运行时，所有访客共用 Docker 网关的 IP，所以任何人提交 5 次询价后，表单会关闭一小时。
+
+### CRM → ERPNext 销售订单（第三部分）
+
+业务员把商机标为**成交**时，CRM 会在同一个请求里，在 ERPNext 建一张**已提交的销售订单**，生产主管马上就能排产。两套系统仍然分开，CRM 只通过 ERPNext 的 REST API 写入，和平板页一样。
+
+```bash
+cd ERP && docker compose up -d          # 先启动 ERP，它会建立 erp_crm_link 网络
+cd ../CRM
+docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d --build
+bash scripts/test-erp.sh                # 17 个合约测试，跑在独立的 contract.localhost 站点
+```
+
+不加 `docker-compose.erp.yml` 时，CRM 和第二部分一样单独运行，成交的商机会显示 "ERP link not configured"。第三部分之前建立的 ERP 站点，要先补一次对接用户和密钥：`bench --site localhost set-config crm_api_key crm-demo-key`（`crm_api_secret` 同理，默认 `crm-demo-secret`），再执行 `bench --site localhost execute ombak_mfg.setup.masters.setup_masters`。
+
+- **成交不会丢**：先保存成交，再发订单（10 秒超时）。ERPNext 连不上或拒绝时，商机仍然是成交，「ERP order」面板显示原因和「Send again」表单。以前成交的商机也可以从这里补发。
+- **不会重复建单**：报价单号写进订单的 `crm_reference` 字段（ERPNext 里唯一）。每次发送都先按单号查找，已存在就直接沿用；发送前先把商机标为「发送中」，所以连点两次也只会发一次。
+- **客户**：按名称精确查找，找不到就新建（公司类型、Commercial 客户组、按州属归到马来西亚或新加坡地区、SSM/UEN 作税号）。客户资料有地址和城市时，一并建账单地址。
+- **金额一分不差**：明细按报价的价目表价格，折扣合成一笔整单折扣，并关闭整数取整，所以订单净额和报价总额完全相同。万一不一致，面板会显示 "Sent, total differs"。
+- **SST**：马来西亚客户的订单套用「Malaysia SST - OMW」模板（10%，这是假设，部分钢材按税号是 5%，税率只存在这个模板里）；新加坡客户不加税（假设按 K2 出口）。
+- **交货日期**：成交时必填，默认今天 + 14 天（吉隆坡时间），范围是今天到 365 天内。
+- **谁能发送**：商机负责人或经理。发送失败的商机会出现在「我的一天」的 "ERP orders not created" 里（经理看到整个团队的）。
+- **最小权限**：ERPNext 里的「CRM Integration」角色只能新建销售订单，并且只能读取、修改、提交自己建的订单（`if_owner`）；不能取消或删除订单，也碰不到发票、工单和工序卡（测试逐项验证）。CRM 容器只和 ERPNext backend 共用一个网络，连不到 Redis 和 MariaDB。
+- **设定**：两边共用 `CRM_API_KEY` / `CRM_API_SECRET`。默认的 `crm-demo-key` / `crm-demo-secret` 只适合本机演示，正式使用请在 `ERP/.env` 和 `CRM/.env` 里改掉。
+- **已知问题和限制**：
+  - ERPNext 的 `/printview` 页面不检查 `if_owner`，所以对接密钥可以读到任何销售订单（只能读，不能改；中等风险，已接受）。
+  - 在 ERPNext 里修订（Amend）已取消的订单会复制 `crm_reference`，因此会被当成重复而拒绝。修改 ERP 订单不在范围内。
+  - 产品以整数件（Nos）计，报价里有小数数量的行会发送失败，商机上会显示 ERPNext 给出的原因。
+  - ERP backend 容器被重建（不只是重启）时，websocket 也要重建：`docker compose up -d --force-recreate websocket`。
+  - 同一个新客户的两个不同商机如果在同一瞬间发送，可能在 ERPNext 建出两个客户。
+  - 查找时找到的草稿订单，会按它原来的日期提交。
+  - 另一次发送还在进行时，用无效日期重发会得到日期错误（400），而不是"正在发送"。
+  - ERPNext 那边取消或修改订单，不会同步回 CRM；没有自动重试。
+  - 报价单号来自 CRM 数据库，CRM 重新灌数据后，ERPNext 里同号的旧订单会被沿用。
+
+CRM 里成交的商机，和它在 ERPNext 里的订单（已提交，净额 235.88 与报价一致，一行 SST，由 CRM Integration 用户建立）：
+
+![ERP order panel](CRM/docs/screenshots/crm-erp-order.png)
+![Sales order in ERPNext Desk](ERP/docs/screenshots/erpnext-sales-order.png)
+![Sales order totals and activity](ERP/docs/screenshots/erpnext-sales-order-totals.png)
 
 ### 取舍与限制
 

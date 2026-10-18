@@ -37,6 +37,7 @@ urlpatterns = [
     path("deals/<int:pk>/lost/", opportunities.deal_lost, name="opportunity_lost"),
     path("deals/<int:pk>/edit/", opportunities.deal_edit, name="opportunity_edit"),
     path("deals/<int:pk>/assign/", opportunities.deal_assign, name="opportunity_assign"),
+    path("deals/<int:pk>/erp/send/", opportunities.deal_erp_send, name="opportunity_erp_send"),
     path("deals/<int:pk>/quotes/", quotes.quote_new, name="opportunity_quote_new"),
     # quotes
     path("quotes/<int:pk>/", quotes.quote_detail, name="quote"),

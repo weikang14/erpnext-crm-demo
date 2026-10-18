@@ -133,6 +133,31 @@ TERMINAL_PERMISSIONS = {
 	# Frappe checks "submit" for any update to a submitted document; still no create or cancel
 	"Work Order": ("read", "write", "submit"),
 }
+CRM_USER = "crm.integration@ombakmetal.example"
+# least privilege for the CRM's API user (004): find or create the customer, read the SST template,
+# create and submit the sales order. Address create comes from the standard "All" role (if_owner).
+CRM_ROLE = "CRM Integration"
+CRM_PERMISSIONS = {
+	# inserted as a draft, then submitted, so ERPNext computes the status (an insert with docstatus 1
+	# keeps "Draft"); submitting a saved draft checks write as well as submit. No cancel, no delete.
+	# if_owner: read, write and submit only its own orders, never a human's draft or a submitted order's po_no
+	# (a rule flag, set by _crm_role like the ptypes, so rules made before it gain it too)
+	"Sales Order": ("read", "write", "create", "submit", "if_owner"),
+	"Customer": ("read", "create"),
+	"Item": ("read",),
+	"Sales Taxes and Charges Template": ("read",),
+	# a sales order checks the customer's receivable account; select (not read) is enough
+	"Account": ("select",),
+	# a sales order fills in the customer's primary address; the demo's are Administrator's and the
+	# standard "All" rule only reads your own, so the role reads addresses (still no write or delete)
+	"Address": ("read",),
+}
+
+# SST on CRM orders to Malaysian customers (004): 10 % is assumed for goods not in the 2025
+# rate order; a 5 % tariff code is a change of this one template row
+SST_ACCOUNT = f"SST Payable - {ABBR}"
+SST_TEMPLATE = f"Malaysia SST - {ABBR}"
+SST_RATE = 10
 
 USERS = {
 	"lim.weijie@ombakmetal.example": (
@@ -155,12 +180,17 @@ def setup_masters():
 	_items()
 	_boms()
 	_parties()
+	_sst()
+	_crm_masters()
+	_crm_reference_field()
 	_transport()
 	_users()
 	_defect_reasons()
 	_operators()
 	_terminal_role()
 	_integration_user()
+	_crm_role()
+	_crm_user()
 	frappe.db.commit()
 
 
@@ -426,6 +456,66 @@ def _parties():
 		_ensure("Supplier", name, {"supplier_name": name, "supplier_group": group})
 
 
+def _sst():
+	_ensure(
+		"Account",
+		SST_ACCOUNT,
+		{
+			"account_name": "SST Payable",
+			"parent_account": f"Duties and Taxes - {ABBR}",
+			"account_type": "Tax",
+			"company": COMPANY,
+		},
+	)
+	# not the default: only orders that name it are taxed (the CRM's Malaysian customers)
+	_ensure(
+		"Sales Taxes and Charges Template",
+		SST_TEMPLATE,
+		{
+			"title": "Malaysia SST",
+			"company": COMPANY,
+			"is_default": 0,
+			"taxes": [
+				{
+					"charge_type": "On Net Total",
+					"account_head": SST_ACCOUNT,
+					"rate": SST_RATE,
+					"description": f"SST {SST_RATE}%",
+				}
+			],
+		},
+	)
+
+
+def _crm_masters():
+	# the CRM creates customers in these; ERPNext refuses a group record ("Cannot select a Group type")
+	_ensure(
+		"Customer Group",
+		"Commercial",
+		{"customer_group_name": "Commercial", "parent_customer_group": "All Customer Groups"},
+	)
+	for t in ("Malaysia", "Singapore"):
+		_ensure("Territory", t, {"territory_name": t, "parent_territory": "All Territories"})
+
+
+def _crm_reference_field():
+	"""The CRM quote number on its sales orders; unique, so ERPNext holds one order per quote."""
+	from frappe.custom.doctype.custom_field.custom_field import create_custom_field
+
+	create_custom_field(  # does nothing when the field exists
+		"Sales Order",
+		{
+			"fieldname": "crm_reference",
+			"label": "CRM reference",
+			"fieldtype": "Data",
+			"insert_after": "po_no",
+			"unique": 1,
+			"read_only": 1,
+			"no_copy": 1,
+		},
+	)
+
+
 def _transport():
 	if not frappe.db.exists("Driver", {"full_name": "Rahim bin Osman"}):
 		frappe.get_doc(
@@ -522,6 +612,38 @@ def _integration_user():
 	key, secret = frappe.conf.get("shopfloor_api_key"), frappe.conf.get("shopfloor_api_secret")
 	if key and secret:
 		user = frappe.get_doc("User", INTEGRATION_USER)
+		user.api_key = key
+		user.api_secret = secret
+		user.save(ignore_permissions=True)
+
+
+def _crm_role():
+	from frappe.permissions import add_permission, update_permission_property
+
+	_ensure("Role", CRM_ROLE, {"role_name": CRM_ROLE, "desk_access": 1})
+	for doctype, ptypes in CRM_PERMISSIONS.items():
+		# the first Custom DocPerm on a doctype copies its standard perms, so standard roles keep them
+		if not frappe.db.exists("Custom DocPerm", {"parent": doctype, "role": CRM_ROLE, "permlevel": 0}):
+			add_permission(doctype, CRM_ROLE, 0)
+		for ptype in ptypes:
+			update_permission_property(doctype, CRM_ROLE, 0, ptype, 1)
+		if "read" not in ptypes:  # a new rule starts with read (the Custom DocPerm default)
+			update_permission_property(doctype, CRM_ROLE, 0, "read", 0)
+
+
+def _crm_user():
+	"""API user for the CRM (004). Key and secret come from site config so they are never
+	committed: bench --site <site> set-config crm_api_key/crm_api_secret."""
+	if not frappe.db.exists("User", CRM_USER):
+		user = frappe.get_doc(
+			{"doctype": "User", "email": CRM_USER, "first_name": "CRM Integration", "send_welcome_email": 0}
+		)
+		user.append_roles(CRM_ROLE)
+		user.insert(ignore_permissions=True)
+
+	key, secret = frappe.conf.get("crm_api_key"), frappe.conf.get("crm_api_secret")
+	if key and secret:
+		user = frappe.get_doc("User", CRM_USER)
 		user.api_key = key
 		user.api_secret = secret
 		user.save(ignore_permissions=True)

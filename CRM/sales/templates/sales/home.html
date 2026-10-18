@@ -19,6 +19,24 @@
   <div class="stat"><span class="stat-label">Won this month</span><span class="stat-value">MYR {{ won_this_month|floatformat:"2g" }}</span></div>
 </section>
 
+{% if erp_not_created %}
+<section class="panel" aria-labelledby="erp-heading">
+  <div class="panelhead"><h2 id="erp-heading">ERP orders not created</h2></div>
+  <ul class="items">
+    {% for deal in erp_not_created %}
+    <li>
+      <div class="what">
+        <a href="{% url 'opportunity' deal.pk %}"><strong>{{ deal.title }}</strong></a>
+        <div class="meta">{{ deal.account.name }}{% if is_manager %} · {{ deal.owner.get_full_name|default:deal.owner.username }}{% endif %}</div>
+        <div class="meta">{{ deal.erp_reason }}</div>
+      </div>
+      <span class="chip chip-red">Failed</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 {% if is_manager %}
 <div class="grid grid-halves">
   <section class="panel" aria-labelledby="approvals-heading">

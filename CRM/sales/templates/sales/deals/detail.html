@@ -15,8 +15,9 @@
       {{ move_form.stage }}
       <button class="btn" type="submit">Move</button>
     </form>
-    <form method="post" action="{% url 'opportunity_won' deal.pk %}">
+    <form method="post" action="{% url 'opportunity_won' deal.pk %}" class="filters">
       {% csrf_token %}
+      {% include "sales/_field.html" with field=won_form.delivery_date %}
       <button class="btn btn-success" type="submit"{% if not sent_quote %} disabled aria-describedby="won-hint"{% endif %}>Mark won</button>
     </form>
   </div>
@@ -72,6 +73,7 @@
   </div>
 
   <div>
+    {% if deal.stage == "won" %}{% include "sales/deals/_erp_panel.html" %}{% endif %}
     <section class="panel" aria-labelledby="facts-heading">
       <div class="panelhead">
         <h2 id="facts-heading">Details</h2>

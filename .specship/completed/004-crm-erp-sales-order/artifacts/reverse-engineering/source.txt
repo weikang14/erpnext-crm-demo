@@ -1,0 +1,3 @@
+Brownfield recon for 004 lives in the standalone package:
+.specship/reverse-engineering/20261014-ombakmetal/
+Handoff: .specship/reverse-engineering/20261014-ombakmetal/brownfield-contract-inputs.md

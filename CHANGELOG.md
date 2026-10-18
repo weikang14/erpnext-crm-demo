@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-10-18: Part 3, CRM → ERPNext sales orders (contract 004)
+
+- **The link:** marking a deal Won in the CRM creates a submitted ERPNext sales order in the same request, through ERPNext's REST API.
+  - The rep enters a requested delivery date at Won: default today + 14, at most 365 days ahead.
+  - Missing customers are created, with a billing address when the account has one.
+  - Lines go at the quote's list price, with one header discount, so the order's net total equals the quote to the sen.
+  - Malaysian customers get the new "Malaysia SST - OMW" template (10 %); Singapore customers get no tax (export).
+  - Won never depends on ERPNext. A failed send shows the reason and a Send again form on the deal, and appears on My day.
+  - The quote number in the unique `crm_reference` field plus lookup-first sending means a retry can't create a second order.
+- **ERP side (`setup_masters`, idempotent):** the role *CRM Integration* and its API user, the `crm_reference` custom field, an SST account and template. The 19 demo orders are unchanged.
+- **Running it:** an optional compose override (`CRM/docker-compose.erp.yml`) puts the CRM on a network it shares only with the ERPNext backend.
+- **Fixed during deploy and validation:**
+  - **First real send refused (403):** the integration role couldn't read the customer's address, which belonged to Administrator. It now reads addresses.
+  - **Order status stuck on "Draft":** inserting an order already submitted skips ERPNext's status update. Orders are now created as drafts, then submitted.
+  - **Network exposure:** the CRM container joined the whole ERP network, with Redis and MariaDB in reach. It now has a backend-only link network.
+  - **Too much access:** the integration user could change or submit sales orders it didn't create. Its Sales Order rule is now `if_owner`.
+  - **500 errors after Won:** order names repeated across ERPNext sites collided in the CRM, and a database error while claiming the send was unhandled. Both now end as a visible failed send, and Won is kept.
+  - **No upper limit on the delivery date:** now 365 days.
+  - The refusal message says the deal stays won, and the panel shows the delivery date.
+- **Testing:**
+  - 331 CRM tests, 17 of them live contract tests on a separate `contract.localhost` site;
+  - 50 ERPNext tests (was 32) and 63 terminal tests;
+  - the UI probe covers the won deal's ERP panel;
+  - Lighthouse 100/100/100 on the panels.
+- **Validation:** independent code, security, integration, browser, design and alignment passes all PASS, with a skeptic re-check of the cycle-1 fixes and a completeness critic. Recovery took 2 of 3 rounds.
+- **Known issues:** see the README's part 3 list. The main one: ERPNext's `/printview` lets the integration key read any sales order (read-only, medium, accepted).
+
 ## 2026-10-14: Part 2, sales CRM (contract 003)
 
 - **The app:** a Django 6.1 + PostgreSQL 17 sales CRM in `CRM/`, at http://localhost:8082.

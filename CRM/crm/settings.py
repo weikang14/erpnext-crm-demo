@@ -1,6 +1,7 @@
 """Settings for the Ombak sales CRM. Everything environment-specific comes from env vars."""
 
 import os
+import sys
 from pathlib import Path
 
 from django.utils.csp import CSP
@@ -104,5 +105,17 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"django": {"handlers": ["console"], "level": "INFO"}},
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO"},
+        "sales": {"handlers": ["console"], "level": "INFO"},  # send_order logs unexpected errors (ids, no secrets)
+    },
 }
+
+# ERPNext link (004): an empty URL means not configured. docker-compose.erp.yml sets these.
+ERPNEXT_URL = os.environ.get("ERPNEXT_URL", "")
+ERPNEXT_SITE = os.environ.get("ERPNEXT_SITE", "localhost")
+ERPNEXT_API_KEY = os.environ.get("ERPNEXT_API_KEY", "")
+ERPNEXT_API_SECRET = os.environ.get("ERPNEXT_API_SECRET", "")
+ERPNEXT_DESK_URL = os.environ.get("ERPNEXT_DESK_URL", "")
+if sys.argv[1:2] == ["test"]:  # unit tests never reach ERPNext; the live contract tests opt back in from the env
+    ERPNEXT_URL = ""

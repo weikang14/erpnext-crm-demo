@@ -53,13 +53,20 @@ services:
         fi;
         bench --site localhost set-config shopfloor_api_key "$$SHOPFLOOR_API_KEY";
         bench --site localhost set-config shopfloor_api_secret "$$SHOPFLOOR_API_SECRET";
+        bench --site localhost set-config crm_api_key "$$CRM_API_KEY";
+        bench --site localhost set-config crm_api_secret "$$CRM_API_SECRET";
     environment:
       SHOPFLOOR_API_KEY: ${SHOPFLOOR_API_KEY:-shopfloor-demo-key}
       SHOPFLOOR_API_SECRET: ${SHOPFLOOR_API_SECRET:-shopfloor-demo-secret}
+      # the CRM's API user (004); CRM/docker-compose.erp.yml uses the same defaults
+      CRM_API_KEY: ${CRM_API_KEY:-crm-demo-key}
+      CRM_API_SECRET: ${CRM_API_SECRET:-crm-demo-secret}
 
   backend:
     <<: [*bench, *after-config]
     restart: on-failure
+    # crm_link: the CRM (CRM/docker-compose.erp.yml) reaches backend only, not Redis or MariaDB
+    networks: [frappe_network, crm_link]
     # socket.io authenticates by calling back http://localhost (the Origin nginx sets) from
     # inside the websocket container, which shares this network namespace; so gunicorn also
     # listens on :80 here (binding a low port as non-root needs this namespace-only sysctl).
@@ -186,4 +193,6 @@ volumes:
 
 networks:
   frappe_network:
+    driver: bridge
+  crm_link:  # erp_crm_link: backend and the CRM web container only
     driver: bridge

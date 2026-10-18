@@ -1,0 +1,32 @@
+<section class="panel" aria-labelledby="erp-heading">
+  <div class="panelhead">
+    <h2 id="erp-heading">ERP order</h2>
+    {% if not erp_configured %}<span class="chip">ERP link not configured</span>
+    {% elif erp_state == "sent" and deal.erp_error %}<span class="chip chip-amber">Sent, total differs</span>
+    {% elif erp_state == "sent" %}<span class="chip chip-green">Sent</span>
+    {% elif erp_state == "failed" %}<span class="chip chip-red">Failed</span>
+    {% elif erp_state == "sending" %}<span class="chip">Sending…</span>
+    {% else %}<span class="chip">Not sent</span>{% endif %}
+  </div>
+  {% if deal.delivery_date or erp_configured and erp_state == "sent" or erp_configured and erp_state == "failed" %}
+  <dl class="details">
+    {% if erp_configured and erp_state == "sent" %}
+    <dt>Order</dt>
+    <dd>{% if erp_desk_url %}<a class="btn" href="{{ erp_desk_url }}/app/sales-order/{{ deal.erp_order|urlencode }}">{{ deal.erp_order }}</a>{% else %}{{ deal.erp_order }}{% endif %}</dd>
+    <dt>Sent</dt><dd>{{ deal.erp_attempted_at|date:"j M Y, H:i" }}</dd>
+    {% if deal.erp_error %}<dt>Check</dt><dd>{{ deal.erp_error }}</dd>{% endif %}
+    {% elif erp_configured and erp_state == "failed" %}
+    <dt>Reason</dt><dd>{{ deal.erp_reason }}</dd>
+    <dt>Last tried</dt><dd>{{ deal.erp_attempted_at|date:"j M Y, H:i" }}</dd>
+    {% endif %}
+    {% if deal.delivery_date %}<dt>Delivery</dt><dd>{{ deal.delivery_date|date:"j M Y" }}</dd>{% endif %}
+  </dl>
+  {% endif %}
+  {% if send_form %}
+  <form method="post" action="{% url 'opportunity_erp_send' deal.pk %}" class="addform">
+    {% csrf_token %}
+    {% include "sales/_field.html" with field=send_form.delivery_date %}
+    <button class="btn btn-primary btn-block" type="submit">{% if erp_state == "failed" %}Send again{% else %}Send to ERPNext{% endif %}</button>
+  </form>
+  {% endif %}
+</section>
