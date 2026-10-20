@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -8,11 +8,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
 <script>
-// language first, so the page never flashes the other one: saved choice, else the browser's language
+// language first, so the page never flashes the other one:
+// #en / #zh in the link, else the saved choice, else English
 (function () {
-  var l;
-  try { l = localStorage.getItem("erpnext-crm-test-manual-lang"); } catch (e) {}
-  if (l !== "zh" && l !== "en") l = /^zh/i.test(navigator.language || "") ? "zh" : "en";
+  var l, h = (location.hash || "").slice(1);
+  if (h === "en" || h === "zh") {
+    l = h;
+    try { localStorage.setItem("erpnext-crm-test-manual-lang", l); } catch (e) {}
+  } else {
+    try { l = localStorage.getItem("erpnext-crm-test-manual-lang"); } catch (e) {}
+  }
+  if (l !== "zh" && l !== "en") l = "en";
   document.documentElement.setAttribute("data-lang", l);
   document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
 })();
@@ -506,6 +512,13 @@ for (const b of document.querySelectorAll("[data-set-lang]")) {
   });
 }
 applyLang(lang());
+// a #en / #zh link followed from this same page
+addEventListener("hashchange", () => {
+  const h = location.hash.slice(1);
+  if (h !== "en" && h !== "zh") return;
+  applyLang(h);
+  try { localStorage.setItem(LANG_KEY, h); } catch (e) {}
+});
 
 function setState(li, state) {
   const id = li.dataset.id;
