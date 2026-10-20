@@ -8,17 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
 <script>
-// language first, so the page never flashes the other one:
-// #en / #zh in the link, else the saved choice, else English
+// language first, so the page never flashes the other one: always English, unless the link ends in #zh
 (function () {
-  var l, h = (location.hash || "").slice(1);
-  if (h === "en" || h === "zh") {
-    l = h;
-    try { localStorage.setItem("erpnext-crm-test-manual-lang", l); } catch (e) {}
-  } else {
-    try { l = localStorage.getItem("erpnext-crm-test-manual-lang"); } catch (e) {}
-  }
-  if (l !== "zh" && l !== "en") l = "en";
+  var l = (location.hash || "").slice(1) === "zh" ? "zh" : "en";
   document.documentElement.setAttribute("data-lang", l);
   document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
 })();
@@ -160,8 +152,8 @@ footer { color: var(--muted); font-size: 0.8rem; padding-block: 28px 40px; }
     </div>
     <div class="tools">
       <div class="langs" role="group" aria-label="语言 / Language">
-        <button type="button" data-set-lang="zh" lang="zh-CN">中文</button>
         <button type="button" data-set-lang="en" lang="en-GB">EN</button>
+        <button type="button" data-set-lang="zh" lang="zh-CN">中文</button>
       </div>
       <button class="btn" id="copy-results" type="button"><span lang="zh">复制结果</span><span lang="en">Copy results</span></button>
       <button class="btn" id="reset" type="button"><span lang="zh">清除标记</span><span lang="en">Clear marks</span></button>
@@ -453,7 +445,7 @@ const UI = {
   en: { title: "ERPNext + CRM Test Manual", copied: "Copied", select: "Selected, press Ctrl+C", confirm: "Clear all?", note: "What did you actually see?",
         noteLabel: "note", results: (d, p, f, r) => `Test results ${d}: passed ${p}, failed ${f}, not run ${r}`, failed: "Failed:", sep: ": " },
 };
-const KEY = "erpnext-crm-test-manual-v1", LANG_KEY = "erpnext-crm-test-manual-lang";
+const KEY = "erpnext-crm-test-manual-v1";
 const root = document.documentElement;
 const lang = () => (root.getAttribute("data-lang") === "en" ? "en" : "zh");
 const both = (zh, en) => `<span lang="zh">${zh}</span><span lang="en">${en}</span>`;
@@ -506,18 +498,13 @@ function applyLang(l) {
   }
 }
 for (const b of document.querySelectorAll("[data-set-lang]")) {
-  b.addEventListener("click", () => {
-    applyLang(b.dataset.setLang);
-    try { localStorage.setItem(LANG_KEY, b.dataset.setLang); } catch (e) {}
-  });
+  b.addEventListener("click", () => applyLang(b.dataset.setLang));
 }
 applyLang(lang());
 // a #en / #zh link followed from this same page
 addEventListener("hashchange", () => {
   const h = location.hash.slice(1);
-  if (h !== "en" && h !== "zh") return;
-  applyLang(h);
-  try { localStorage.setItem(LANG_KEY, h); } catch (e) {}
+  if (h === "en" || h === "zh") applyLang(h);
 });
 
 function setState(li, state) {
