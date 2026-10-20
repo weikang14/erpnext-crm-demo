@@ -62,6 +62,7 @@ updates only work there).
 Both ports are bound to `127.0.0.1`, so nothing is reachable from your network.
 
 - **Tests:** `bash ERP/scripts/test.sh` (50 ERPNext integration tests on a separate `test.localhost` site) and `bash ERP/scripts/test-portal.sh` (63 Django tests, including live contract tests against a separate `contract.localhost` ERPNext site). The demo data is never touched.
+- **Manual test checklist:** [`docs/test-manual.html`](docs/test-manual.html) (in Chinese). Download it and open it in a browser. It lists 45 page-by-page checks across ERPNext, the terminal, the CRM and the CRM → ERPNext link: the URL to open (one click), what to do and what you should see. You can mark each check passed or failed, note what went wrong, and copy a summary of the results. Commands have copy buttons. The marks stay in your browser only.
 - **Start over:** demo dates are relative to the day you generate them. `docker compose down -v`, then run the three commands above again.
 - **Trigger the alert now** instead of waiting for the daily job: `docker compose exec backend bench --site localhost execute ombak_mfg.tasks.notify_overdue_work_orders`.
 - **After editing app code:** `docker compose restart backend` (nginx and the websocket follow it); after editing terminal code, `docker compose restart portal`. To edit DocTypes in the UI, first run `bench --site localhost set-config developer_mode 1` so changes are written back into the app.
@@ -508,6 +509,7 @@ ERPNext 打开 **http://localhost:8080**，平板页打开 **http://localhost:80
 两个端口都只绑定在 `127.0.0.1`，局域网里的其他电脑连不进来。
 
 - **测试**：`bash ERP/scripts/test.sh`（50 个 ERPNext 集成测试，跑在独立的 `test.localhost` 站点）和 `bash ERP/scripts/test-portal.sh`（63 个 Django 测试，其中包括对独立的 `contract.localhost` ERPNext 站点的合约测试）。都不会动到演示数据。
+- **手动测试手册**：[`docs/test-manual.html`](docs/test-manual.html)，下载后用浏览器打开。里面有 45 项逐个网页的测试，涵盖 ERPNext、平板页、CRM 和 CRM → ERPNext 串接；每项写明要打开的网址（点一下就开）、怎么操作、应该看到什么。可以逐项标记通过或失败、给失败项写备注、一键复制测试结果；命令都有复制按钮。标记只存在你自己的浏览器里。
 - **重来**：演示数据的日期以生成当天为准。`docker compose down -v`，然后重新执行上面的命令。
 - **马上触发提醒**，不用等每日任务：`docker compose exec backend bench --site localhost execute ombak_mfg.tasks.notify_overdue_work_orders`。
 - **改了应用代码之后**：`docker compose restart backend`（nginx 和 websocket 会跟着重启）；改了平板页代码之后：`docker compose restart portal`。要在界面里修改 DocType，先执行 `bench --site localhost set-config developer_mode 1`，改动才会写回应用。

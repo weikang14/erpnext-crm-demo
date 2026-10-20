@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ERPNext + CRM 测试手册</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: a QA run sheet. Sticky progress header, section index, one row per test (ID | steps | pass/fail). */
+:root {
+  --bg: #f4f6f9; --surface: #ffffff; --fg: #18212c; --muted: #5a6575; --line: #dde2ea; --code-bg: #edf0f5;
+  --erp: #2456c4; --term: #a85208; --crm: #5a3ec2; --link: #0d7268;
+  --pass: #16773a; --pass-bg: #e5f5ea; --fail: #b4232a; --fail-bg: #fcebec; --warn-bg: #fff6e0; --warn-line: #e0b54a;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #161d26; --fg: #e5eaf0; --muted: #98a4b3; --line: #2a3442; --code-bg: #1d2531;
+    --erp: #7ea4ff; --term: #f0a457; --crm: #ad98ff; --link: #4fd0c3;
+    --pass: #5bd98a; --pass-bg: #123022; --fail: #ff8080; --fail-bg: #3a181a; --warn-bg: #2e2612; --warn-line: #8c6d22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d26; --fg: #e5eaf0; --muted: #98a4b3; --line: #2a3442; --code-bg: #1d2531;
+  --erp: #7ea4ff; --term: #f0a457; --crm: #ad98ff; --link: #4fd0c3;
+  --pass: #5bd98a; --pass-bg: #123022; --fail: #ff8080; --fail-bg: #3a181a; --warn-bg: #2e2612; --warn-line: #8c6d22;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; }
+a { color: var(--erp); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 4px; overflow-wrap: anywhere; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.3; margin: 0; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--erp); outline-offset: 2px; }
+
+/* header */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding-block: 12px; }
+.brand { min-width: 0; flex: 1 1 260px; }
+.brand h1 { font-size: 1.25rem; font-weight: 700; }
+.brand p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.tally { display: flex; gap: 14px; font-size: 0.85rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tally b { font-weight: 700; }
+.tally .p b { color: var(--pass); } .tally .f b { color: var(--fail); } .tally .r b { color: var(--fg); }
+.tools { display: flex; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 4px 12px; font-size: 0.85rem; }
+.btn:hover { border-color: var(--muted); }
+.btn.danger { border-color: var(--fail); color: var(--fail); }
+.bar { flex-basis: 100%; height: 6px; border-radius: 3px; background: var(--code-bg); display: flex; overflow: hidden; }
+.bar span { display: block; height: 100%; transition: width .2s; }
+.bar .bp { background: var(--pass); } .bar .bf { background: var(--fail); }
+
+/* index */
+.toc { display: flex; flex-wrap: wrap; gap: 6px 8px; padding-block: 18px 6px; margin: 0; list-style: none; padding-inline: 0; }
+.toc a { display: inline-flex; gap: 8px; align-items: baseline; text-decoration: none; color: var(--fg); border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 12px; font-size: 0.85rem; }
+.toc a:hover { border-color: var(--muted); }
+.toc .n { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* sections */
+section { padding-block: 26px 8px; scroll-margin-top: 110px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
+.sec-head h2 { font-size: 1.15rem; }
+.port { font-family: var(--font-mono); font-size: 0.78rem; font-weight: 500; color: var(--sys); border: 1px solid var(--sys); border-radius: 4px; padding: 0 6px; }
+.lead { margin: 0 0 12px; color: var(--muted); max-width: 70ch; }
+.sys-erp { --sys: var(--erp); } .sys-term { --sys: var(--term); } .sys-crm { --sys: var(--crm); } .sys-link { --sys: var(--link); } .sys-none { --sys: var(--muted); }
+
+.callout { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 10px 14px; margin: 12px 0; max-width: 80ch; }
+.callout p { margin: 0; } .callout p + p { margin-top: 6px; }
+
+.cmd { position: relative; background: var(--code-bg); border-radius: 8px; margin: 10px 0 14px; }
+.cmd pre { margin: 0; padding: 12px 14px; padding-right: 72px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.6; }
+.cmd .copy { position: absolute; top: 8px; right: 8px; padding: 2px 10px; font-size: 0.78rem; }
+.cmt { color: var(--muted); }
+
+.tbl { overflow-x: auto; margin: 10px 0 14px; }
+table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 0.9rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 500; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.02em; }
+tr:last-child td { border-bottom: 0; }
+
+/* test rows */
+.tests { list-style: none; margin: 8px 0 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.test { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 16px 14px 0; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
+.test:last-child { border-bottom: 0; }
+.test[data-state="pass"] { border-left-color: var(--pass); }
+.test[data-state="fail"] { border-left-color: var(--fail); background: var(--fail-bg); }
+.tid { font-family: var(--font-mono); font-weight: 500; color: var(--sys); padding-left: 12px; padding-top: 1px; }
+.tbody { min-width: 0; }
+.turl { font-family: var(--font-mono); font-size: 0.82rem; margin-bottom: 4px; overflow-wrap: anywhere; color: var(--muted); }
+.turl a { color: var(--sys); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--sys) 40%, transparent); }
+.turl a:hover { border-bottom-color: var(--sys); }
+.turl .host { color: var(--muted); }
+.tbody p { margin: 0; }
+.tbody p + p { margin-top: 2px; }
+.lbl { display: inline-block; min-width: 3em; font-size: 0.75rem; color: var(--muted); letter-spacing: 0.06em; }
+.texp { color: var(--fg); }
+.q { font-family: var(--font-mono); font-size: 0.84em; background: var(--code-bg); padding: 0 0.3em; border-radius: 3px; }
+.note { display: block; width: 100%; margin-top: 8px; min-height: 2.6em; resize: vertical; border: 1px solid var(--fail); border-radius: 6px; background: var(--surface); color: var(--fg); font: inherit; font-size: 0.88rem; padding: 6px 8px; }
+.tact { display: flex; gap: 6px; align-self: start; }
+.tact button { border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 6px; padding: 3px 10px; font-size: 0.82rem; min-width: 52px; }
+.tact .b-pass[aria-pressed="true"] { background: var(--pass); border-color: var(--pass); color: var(--surface); }
+.tact .b-fail[aria-pressed="true"] { background: var(--fail); border-color: var(--fail); color: var(--surface); }
+.tact button:hover { border-color: var(--muted); }
+.after { margin-top: 12px; }
+
+footer { color: var(--muted); font-size: 0.8rem; padding-block: 28px 40px; }
+
+@media (max-width: 640px) {
+  .test { grid-template-columns: minmax(0, 1fr) auto; padding-left: 12px; }
+  .tid { grid-column: 1; padding-left: 0; }
+  .tact { grid-column: 2; grid-row: 1; }
+  .tbody { grid-column: 1 / -1; }
+  .top .wrap { gap: 6px 14px; }
+  section { scroll-margin-top: 150px; }
+}
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>ERPNext + CRM 测试手册</h1>
+      <p>逐个网页手动测试 · ERPNext 8080 · 平板页 8081 · CRM 8082</p>
+    </div>
+    <div class="tally" aria-live="polite">
+      <span class="p">通过 <b id="n-pass">0</b></span>
+      <span class="f">失败 <b id="n-fail">0</b></span>
+      <span class="r">未测 <b id="n-rest">0</b></span>
+    </div>
+    <div class="tools">
+      <button class="btn" id="copy-results" type="button">复制结果</button>
+      <button class="btn" id="reset" type="button">清除标记</button>
+    </div>
+    <div class="bar" aria-hidden="true"><span class="bp" id="bar-pass"></span><span class="bf" id="bar-fail"></span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <ul class="toc" id="toc"></ul>
+
+  <section id="prep" class="sys-none">
+    <div class="sec-head"><h2>0. 准备</h2></div>
+    <div class="callout">
+      <p><b>手动测试会真的写入演示数据</b>：报工、登记不良、成交、在 ERPNext 建销售订单。测试完想恢复原样，看<a href="#reset-data">第 6 节</a>。</p>
+    </div>
+    <div class="cmd"><button class="btn copy" type="button">复制</button><pre>cd ERP
+docker compose up -d                       <span class="cmt"># 先启动 ERP</span>
+docker compose ps                          <span class="cmt"># 都应该是 running（create-site、configurator 跑完就退出，正常）</span>
+docker compose exec backend bench --site localhost execute ombak_mfg.setup.check_demo.check   <span class="cmt"># 应该全部 PASS</span>
+
+cd ../CRM
+docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d   <span class="cmt"># 带 ERP 串接启动 CRM</span></pre></div>
+    <div class="tbl"><table>
+      <thead><tr><th>网址</th><th>系统</th><th>登录</th></tr></thead>
+      <tbody>
+        <tr><td><a class="mono" href="http://localhost:8080" target="_blank" rel="noopener">localhost:8080</a></td><td>ERPNext Desk</td><td><code>Administrator</code> / <code>admin</code>；生产主管 <code>lim.weijie@ombakmetal.example</code> / <code>Ombak@2026</code></td></tr>
+        <tr><td><a class="mono" href="http://localhost:8081" target="_blank" rel="noopener">localhost:8081</a></td><td>车间平板页</td><td><code>ahmad</code>、<code>meiling</code>、<code>rajesh</code>、<code>nurul</code> / <code>Operator@2026</code></td></tr>
+        <tr><td><a class="mono" href="http://localhost:8082" target="_blank" rel="noopener">localhost:8082</a></td><td>销售 CRM</td><td>经理 <code>hafiz</code>；业务员 <code>aisyah</code>（北区）、<code>kumar</code>、<code>jason</code>（中区）、<code>siti</code>（南区）、<code>weiling</code>（新加坡） / <code>Sales@2026</code></td></tr>
+        <tr><td><a class="mono" href="http://localhost:8082/enquiry/" target="_blank" rel="noopener">localhost:8082/enquiry/</a></td><td>公开询价表单</td><td>不用登录</td></tr>
+        <tr><td><a class="mono" href="http://localhost:8082/admin/" target="_blank" rel="noopener">localhost:8082/admin/</a></td><td>CRM 后台</td><td><code>hafiz</code></td></tr>
+      </tbody>
+    </table></div>
+    <p class="lead">请一律用 <code>localhost</code>，不要用 <code>127.0.0.1</code>（ERPNext 的站点按主机名命名）。同时测两个角色时，用一个普通窗口加一个无痕窗口，就不用来回登出。第一次安装的步骤见 README 的「启动」一节。</p>
+  </section>
+
+  <section id="erp" class="sys-erp">
+    <div class="sec-head"><h2>1. ERPNext Desk</h2><span class="port">8080</span></div>
+    <p class="lead">用 <code>Administrator</code> 登录，E12 换成生产主管。</p>
+    <ol class="tests" data-group="erp"></ol>
+    <div class="after">
+      <p class="lead">E12 不想等每天的定时任务，可以先手动触发：</p>
+      <div class="cmd"><button class="btn copy" type="button">复制</button><pre>cd ERP && docker compose exec backend bench --site localhost execute ombak_mfg.tasks.notify_overdue_work_orders</pre></div>
+    </div>
+  </section>
+
+  <section id="terminal" class="sys-term">
+    <div class="sec-head"><h2>2. 车间平板页</h2><span class="port">8081</span></div>
+    <p class="lead">建议用浏览器开发者工具切到平板尺寸（例如 1024 × 768），也可以直接用平板打开。</p>
+    <ol class="tests" data-group="terminal"></ol>
+  </section>
+
+  <section id="crm" class="sys-crm">
+    <div class="sec-head"><h2>3. 销售 CRM</h2><span class="port">8082</span></div>
+    <div class="callout">
+      <p><b>C1：</b>本地运行时所有访客共用同一个地址，询价表单<b>每小时最多 5 次</b>，超过后一小时内谁都提交不了。</p>
+      <p><b>C14：</b>请用<b>不存在</b>的用户名，例如 <code>locktest</code>。用真实账号测，会把它锁 15 分钟。</p>
+    </div>
+    <ol class="tests" data-group="crm"></ol>
+    <div class="after">
+      <p class="lead">C14 之后提前解锁：</p>
+      <div class="cmd"><button class="btn copy" type="button">复制</button><pre>cd CRM && docker compose exec web python manage.py shell -c "from sales import ratelimit; ratelimit.clear('login', 'locktest')"</pre></div>
+    </div>
+  </section>
+
+  <section id="link" class="sys-link">
+    <div class="sec-head"><h2>4. CRM → ERPNext 串接</h2><span class="port">8082 → 8080</span></div>
+    <p class="lead">需要用第 0 节的方式（带 <code>docker-compose.erp.yml</code>）启动 CRM。不带它启动时，成交商机的面板显示 <span class="q">ERP link not configured</span>，也不会调用 ERPNext。</p>
+    <ol class="tests" data-group="link"></ol>
+    <div class="after">
+      <p class="lead">I7 和 I9 用的命令（只断开 CRM 和 ERPNext 之间的网络，ERP 本身不受影响）：</p>
+      <div class="cmd"><button class="btn copy" type="button">复制</button><pre>docker network disconnect erp_crm_link ombak-crm-web-1   <span class="cmt"># I7：断开</span>
+docker network connect erp_crm_link ombak-crm-web-1      <span class="cmt"># I9：重新连接</span></pre></div>
+      <p class="lead">如果重新连接后还是连不上，重建 CRM 的 web 容器就好：</p>
+      <div class="cmd"><button class="btn copy" type="button">复制</button><pre>cd CRM && docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d --force-recreate web</pre></div>
+    </div>
+  </section>
+
+  <section id="auto" class="sys-none">
+    <div class="sec-head"><h2>5. 自动化测试</h2></div>
+    <div class="tbl"><table>
+      <thead><tr><th>命令</th><th>内容</th><th>预期</th></tr></thead>
+      <tbody>
+        <tr><td><code>bash ERP/scripts/test.sh</code></td><td>ERPNext 集成测试，跑在独立的 <code>test.localhost</code> 站点</td><td>50 个，OK</td></tr>
+        <tr><td><code>bash ERP/scripts/test-portal.sh</code></td><td>平板页 Django 测试，含对 <code>contract.localhost</code> 的合约测试</td><td>63 个，OK</td></tr>
+        <tr><td><code>bash CRM/scripts/test.sh</code></td><td>CRM Django 测试（PostgreSQL）</td><td>331 个，OK（17 个连 ERPNext 的测试跳过）</td></tr>
+        <tr><td><code>bash CRM/scripts/test-erp.sh</code></td><td>CRM 对真实 ERPNext 的合约测试，只跑在 <code>contract.localhost</code></td><td>17 个，OK</td></tr>
+      </tbody>
+    </table></div>
+    <p class="lead">这些测试都不会动到演示数据。</p>
+  </section>
+
+  <section id="reset-data" class="sys-none">
+    <div class="sec-head"><h2>6. 测试完恢复演示数据</h2></div>
+    <div class="callout"><p>下面的命令会<b>清空两边的全部数据</b>，包括测试时建的销售订单和商机。</p></div>
+    <div class="cmd"><button class="btn copy" type="button">复制</button><pre>cd ERP
+docker compose down -v
+docker compose up -d --build
+docker compose exec backend bench --site localhost execute ombak_mfg.setup.demo.run
+docker compose exec portal python manage.py seed_operators
+
+cd ../CRM
+docker compose -f docker-compose.yml -f docker-compose.erp.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d --build
+docker compose exec web python manage.py seed_demo</pre></div>
+    <p class="lead">只重置其中一边时要注意：CRM 里已发送的商机还指向 ERPNext 的订单号，ERP 重置后这些链接会打不开。</p>
+  </section>
+
+  <footer>标记和备注只存在这个浏览器里，换浏览器或清除网站数据就会消失。</footer>
+</main>
+
+<script>
+const PORT = { e: 8080, t: 8081, c: 8082 };
+// [id, urls: [[port key, path], ...], 操作, 预期]; a path with < > is a pattern, not a link
+const TESTS = {
+  erp: [
+    ["E1", [["e", "/login"]], "用 <code>Administrator</code> / <code>admin</code> 登录", "进入 Desk"],
+    ["E2", [["e", "/app/ombak-factory"]], "看工作台", "3 张数字卡片：Unfinished Work Orders、Overdue Work Orders、Defects This Month；8 个快捷方式（4 张报表、Work Order、Job Card、Defect Log、Defect Reason）"],
+    ["E3", [["e", "/app/sales-order"]], "打开一张月初的演示订单 → <b>Connections</b> 页签", "演示订单有 19 张；Connections 里有生产计划、工单、出货单、销售发票"],
+    ["E4", [["e", "/app/production-plan"]], "打开 <i>Pallet Rack Upright 3m</i> 订单的生产计划", "MRP 发现 GI 2.0 mm 钢板缺料 → 请购单 → 采购订单 → 采购收货，收货带进料检验"],
+    ["E5", [["e", "/app/work-order"], ["e", "/app/job-card"]], "打开一张工单，再看它的工序卡", "4 张工序卡：激光切割 → 折弯 → 焊接 → 喷涂，按顺序，有工时记录"],
+    ["E6", [["e", "/app/defect-log/new"]], "选一张<b>已提交</b>的工序卡，不良数量填得比完工数量还多，保存并提交", "工单、工序、工作站、物料自动带入且不能改；提交时报错，数量不能超过完工数量"],
+    ["E7", [["e", "/app/query-report/Work Order On-Time Rate"]], "用默认日期范围", "显示准时率和平均延迟天数；能找到延迟的工单（演示数据里有 3 张）"],
+    ["E8", [["e", "/app/query-report/Workstation Load"]], "选下一周", "每个工作站的负荷 %；焊接区（Welding Bay）最忙；≥ 90% 标为瓶颈；不会超过 100%"],
+    ["E9", [["e", "/app/query-report/Operation Time Variance"]], "用默认值", "每张已完成工序卡的标准分钟数、实际分钟数、差异"],
+    ["E10", [["e", "/app/query-report/Defect Pareto"]], "用默认值", "按原因从多到少排列，有百分比和累计百分比"],
+    ["E11", [["e", "/app/delivery-trip"]], "打开一张派车单", "有司机、货车和停靠点"],
+    ["E12", [["e", "/login"]], "先执行下方的触发命令，再用 <code>lim.weijie@ombakmetal.example</code> / <code>Ombak@2026</code> 登录 → 点右上角<b>铃铛</b> → 点提醒", "一条 <span class=\"q\">Overdue work orders: N</span>；点开是筛选好的逾期工单列表"],
+  ],
+  terminal: [
+    ["T1", [["t", "/login/"]], "用 <code>rajesh</code> / <code>Operator@2026</code> 登录", "进入他的默认工作站 Welding Bay 的队列"],
+    ["T2", [["t", "/"]], "页首 <b>Station</b> 选 Laser Cutting → <b>Show</b>", "显示该工作站所有未完成的工序卡。每张卡有状态（Running / Paused / Ready / Waiting）和时间标签（Overdue / Today / Later）。排序：进行中、暂停，然后逾期、今天、之后"],
+    ["T3", [["t", "/"]], "看一张 <b>Waiting</b> 的卡", "写着要等哪一道工序（例如 <span class=\"q\">Waits for Laser Cutting</span>），没有 Start 按钮"],
+    ["T4", [["t", "/"]], "对一张 <b>Ready</b> 的卡按 <b>Start</b>", "卡变成 Running，开始计时；不会出现第二个 Start"],
+    ["T5", [["t", "/"]], "<b>Pause</b>，再 <b>Resume</b>", "Pause 后变 Paused（黄色），Resume 后回到 Running"],
+    ["T6", [["t", "/job/<工序卡>/complete/"]], "按 <b>Complete</b> → 填一行不良（原因 + 数量）→ 提交", "绿色提示 <span class=\"q\">PO-JOB… completed: N done, 1 defect line logged.</span>；这张卡离开队列"],
+    ["T7", [["t", "/job/<工序卡>/complete/"]], "另找一张卡完成，不良数量填得比完工数量还多", "工序卡照样完成；红色提示 <span class=\"q\">Defect … was not saved: Rejected qty cannot be more than completed qty.</span>"],
+    ["T8", [["e", "/app/job-card"]], "回 ERPNext Desk 打开 T6 那张工序卡", "状态 Completed，工时记在 Rajesh Kumar 名下；Defect Log 里有那一行不良；下一道工序的卡在它的工作站上变成 Ready"],
+    ["T9", [["t", "/"]], "按 <b>Sign out</b>", "回到登录页"],
+  ],
+  crm: [
+    ["C1", [["c", "/enquiry/"]], "不登录，填一个询价，州属选 Johor，提交", "显示 <span class=\"q\">Thank you</span> 页面"],
+    ["C2", [["c", "/"]], "用 <code>siti</code> 登录（南区：柔佛、马六甲）", "「我的一天」里有 C1 的新线索"],
+    ["C3", [["c", "/leads/"]], "打开那条线索 → <b>Convert</b>", "转成客户和商机，进入商机页"],
+    ["C4", [["c", "/pipeline/"]], "用新商机卡片上的 <b>Move to</b> 选 Quotation", "被拒绝，提示 <span class=\"q\">Send a quote first.</span>；拖放到别的阶段也走同一套规则"],
+    ["C5", [["c", "/deals/<id>/"]], "<b>New quote</b> → 加几行产品，其中一行折扣 15% → <b>Finish the quote</b>", "单价是价目表价格、不能改，只能填折扣；报价单进入等待经理批准"],
+    ["C6", [["c", "/approvals/"]], "用 <code>hafiz</code> 登录（建议无痕窗口）→ 打开这张报价单 → 批准；也可以试驳回并写说明", "批准后报价单变 Approved。如果打开页面之后报价单又被改过，批准会被拒绝：<span class=\"q\">This quote changed since you opened it; review it again.</span>"],
+    ["C7", [["c", "/quotes/<id>/"], ["c", "/quotes/<id>/print/"]], "回到 <code>siti</code> → <b>Mark as sent</b> → 打开打印页", "报价单变 Sent 并锁定；打印页是 A4 版式"],
+    ["C8", [["c", "/deals/<id>/"]], "另找一个商机试 <b>Lost</b>", "必须选丢单原因才能提交；之后商机变成只读"],
+    ["C9", [["c", "/deals/<siti 的商机 id>/"]], "用 <code>jason</code> 登录，直接在地址栏打开 siti 的商机", "404（不是 403）；客户列表 <code>/accounts/</code> 是共享的，看得到"],
+    ["C10", [["c", "/deals/<id>/edit/"]], "修改一个已经发出报价的商机", "金额锁定：<span class=\"q\">A quote has been sent, so the value comes from it. Revise the quote to change it.</span>"],
+    ["C11", [["c", "/reports/"]], "用 <code>hafiz</code> 选不同季度", "按阶段的管道（金额和加权金额）、每个业务员的成交率、预测、丢单原因"],
+    ["C12", [["c", "/deals/?format=csv"]], "用 <code>hafiz</code> 打开", "下载 <code>deals-YYYY-MM-DD.csv</code>"],
+    ["C13", [["c", "/admin/"]], "用 <code>hafiz</code> 登录后台，编辑一个业务员", "可以管理业务员，但不能把任何人设成管理员"],
+    ["C14", [["c", "/login/"]], "用一个<b>不存在</b>的用户名（例如 <code>locktest</code>）连续输错 10 次密码", "第 11 次提示 <span class=\"q\">Too many attempts for this username. Try again in 15 minutes.</span>"],
+    ["C15", [], "任一页面，开发者工具切到手机宽度 390 px", "不会横向滚动；按钮至少 44 px 高"],
+  ],
+  link: [
+    ["I1", [["c", "/deals/<id>/"]], "打开一个已发出报价、还没成交的商机", "<b>Mark won</b> 旁边有 <span class=\"q\">Requested delivery date</span>，默认今天 + 14 天"],
+    ["I2", [["c", "/deals/<id>/"]], "交货日期填昨天 → <b>Mark won</b>", "400，字段旁边提示 <span class=\"q\">The delivery date can't be before today.</span>，商机仍是未成交"],
+    ["I3", [["c", "/deals/<id>/"]], "交货日期填今天 + 366 天 → <b>Mark won</b>", "提示 <span class=\"q\">The delivery date can't be more than a year ahead.</span>，商机仍是未成交"],
+    ["I4", [["c", "/deals/<id>/"]], "用默认日期 <b>Mark won</b>", "绿色提示 <span class=\"q\">Sales order SAL-ORD-… created in ERPNext.</span>；右边 <b>ERP order</b> 面板显示 Sent（绿色）、订单号、发送时间、交货日期"],
+    ["I5", [["e", "/app/sales-order/<订单号>"]], "点面板里的订单号，在 ERPNext 打开（用 Administrator 登录）", "状态 To Deliver and Bill；净额和报价总额完全一样；马来西亚客户有一行 SST 10%；More Info 页签里的 CRM reference 是报价单号；右边显示 Created By CRM Integration"],
+    ["I6", [["c", "/deals/<id>/"]], "用 <code>weiling</code> 成交一个新加坡客户的商机", "ERPNext 订单<b>没有</b>税"],
+    ["I7", [["c", "/deals/<id>/"]], "先执行下方的「断开」命令，再成交另一个商机", "成交照样保存；黄色提示 <span class=\"q\">ERPNext didn't answer. The order may or may not exist; sending again checks first, so it can't be duplicated.</span>；面板显示 Failed（红色）和 <b>Send again</b>"],
+    ["I8", [["c", "/"]], "看「我的一天」", "出现 <span class=\"q\">ERP orders not created</span> 面板，列出 I7 的商机（经理看得到整个团队的）"],
+    ["I9", [["c", "/deals/<id>/"]], "执行下方的「重新连接」命令 → 在 I7 的商机上按 <b>Send again</b>", "变成 Sent；ERPNext 里这个报价单号只有一张订单"],
+  ],
+};
+const SECTIONS = [["prep", "0 准备"], ["erp", "1 ERPNext"], ["terminal", "2 平板页"], ["crm", "3 CRM"], ["link", "4 串接"], ["auto", "5 自动化测试"], ["reset-data", "6 恢复数据"]];
+const KEY = "erpnext-crm-test-manual-v1";
+
+let store = {};
+try { store = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { store = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} };
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function urlHtml([k, path]) {
+  const host = "localhost:" + PORT[k];
+  if (/[<>]/.test(path)) return `<span class="host">${host}</span>${esc(path)}`;
+  return `<a href="http://${host}${encodeURI(path)}" target="_blank" rel="noopener"><span class="host">${host}</span>${esc(path)}</a>`;
+}
+
+for (const list of document.querySelectorAll(".tests")) {
+  for (const [id, urls, act, exp] of TESTS[list.dataset.group]) {
+    const s = store[id] || {};
+    const li = document.createElement("li");
+    li.className = "test";
+    li.dataset.id = id;
+    li.dataset.state = s.state || "";
+    li.innerHTML = `
+      <div class="tid">${id}</div>
+      <div class="tbody">
+        ${urls.length ? `<div class="turl">${urls.map(urlHtml).join(" → ")}</div>` : ""}
+        <p class="tdo"><span class="lbl">操作</span>${act}</p>
+        <p class="texp"><span class="lbl">预期</span>${exp}</p>
+        <textarea class="note" id="note-${id}" aria-label="${id} 备注" placeholder="记下实际看到的情况" ${s.state === "fail" ? "" : "hidden"}>${esc(s.note || "")}</textarea>
+      </div>
+      <div class="tact" role="group" aria-label="${id} 结果">
+        <button type="button" class="b-pass" aria-pressed="${s.state === "pass"}">通过</button>
+        <button type="button" class="b-fail" aria-pressed="${s.state === "fail"}">失败</button>
+      </div>`;
+    list.append(li);
+  }
+}
+
+const allIds = Object.values(TESTS).flat().map((t) => t[0]);
+
+function setState(li, state) {
+  const id = li.dataset.id;
+  const cur = store[id] || {};
+  cur.state = cur.state === state ? "" : state;
+  store[id] = cur;
+  li.dataset.state = cur.state;
+  li.querySelector(".b-pass").setAttribute("aria-pressed", cur.state === "pass");
+  li.querySelector(".b-fail").setAttribute("aria-pressed", cur.state === "fail");
+  const note = li.querySelector(".note");
+  note.hidden = cur.state !== "fail";
+  if (cur.state === "fail") note.focus();
+  save(); refresh();
+}
+
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest(".tact button");
+  if (b) setState(b.closest(".test"), b.classList.contains("b-pass") ? "pass" : "fail");
+});
+document.addEventListener("input", (ev) => {
+  if (!ev.target.classList.contains("note")) return;
+  const id = ev.target.closest(".test").dataset.id;
+  store[id] = { ...(store[id] || {}), note: ev.target.value };
+  save();
+});
+
+function refresh() {
+  const count = (ids, st) => ids.filter((i) => (store[i] || {}).state === st).length;
+  const pass = count(allIds, "pass"), fail = count(allIds, "fail"), total = allIds.length;
+  document.getElementById("n-pass").textContent = pass;
+  document.getElementById("n-fail").textContent = fail;
+  document.getElementById("n-rest").textContent = total - pass - fail;
+  document.getElementById("bar-pass").style.width = (pass / total * 100) + "%";
+  document.getElementById("bar-fail").style.width = (fail / total * 100) + "%";
+  document.getElementById("toc").innerHTML = SECTIONS.map(([sid, label]) => {
+    const ids = (TESTS[sid] || []).map((t) => t[0]);
+    const n = ids.length ? `<span class="n">${count(ids, "pass") + count(ids, "fail")}/${ids.length}</span>` : "";
+    return `<li><a href="#${sid}">${label}${n}</a></li>`;
+  }).join("");
+}
+refresh();
+
+// copy buttons on command blocks
+for (const btn of document.querySelectorAll(".cmd .copy")) {
+  btn.addEventListener("click", () => copyText(btn.nextElementSibling.textContent, btn, btn.nextElementSibling));
+}
+function copyText(text, btn, fallbackEl) {
+  const done = () => { const t = btn.textContent; btn.textContent = "已复制"; setTimeout(() => (btn.textContent = t), 1400); };
+  const select = () => {
+    if (!fallbackEl) return;
+    const r = document.createRange(); r.selectNodeContents(fallbackEl);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    btn.textContent = "已选中，按 Ctrl+C";
+  };
+  try { navigator.clipboard.writeText(text).then(done, select); } catch (e) { select(); }
+}
+
+document.getElementById("copy-results").addEventListener("click", (ev) => {
+  const pass = allIds.filter((i) => (store[i] || {}).state === "pass");
+  const fail = allIds.filter((i) => (store[i] || {}).state === "fail");
+  const rest = allIds.length - pass.length - fail.length;
+  const lines = [`测试结果 ${new Date().toLocaleDateString("zh-CN")}：通过 ${pass.length}，失败 ${fail.length}，未测 ${rest}`];
+  if (fail.length) {
+    lines.push("失败：");
+    for (const id of fail) lines.push(`- ${id}${store[id].note ? "：" + store[id].note.trim() : ""}`);
+  }
+  copyText(lines.join("\n"), ev.currentTarget, null);
+});
+
+const resetBtn = document.getElementById("reset");
+let armed = null;
+resetBtn.addEventListener("click", () => {
+  if (!armed) {
+    resetBtn.textContent = "确定清除？";
+    resetBtn.classList.add("danger");
+    armed = setTimeout(() => { armed = null; resetBtn.textContent = "清除标记"; resetBtn.classList.remove("danger"); }, 3000);
+    return;
+  }
+  clearTimeout(armed); armed = null;
+  store = {}; save();
+  for (const li of document.querySelectorAll(".test")) {
+    li.dataset.state = "";
+    li.querySelectorAll(".tact button").forEach((b) => b.setAttribute("aria-pressed", "false"));
+    const n = li.querySelector(".note"); n.value = ""; n.hidden = true;
+  }
+  resetBtn.textContent = "清除标记"; resetBtn.classList.remove("danger");
+  refresh();
+});
+</script>
+</body>
+</html>
