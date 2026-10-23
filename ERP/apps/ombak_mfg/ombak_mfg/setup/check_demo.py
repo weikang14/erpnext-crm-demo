@@ -6,12 +6,18 @@ bench --site localhost execute ombak_mfg.setup.check_demo.check
 import frappe
 from frappe.utils import date_diff, today
 
+from ombak_mfg.setup.demo import MARKER
 from ombak_mfg.setup.masters import COMPANY
 
 
 def check():
 	c = {"company": COMPANY, "docstatus": 1}
 	sales_orders = frappe.get_all("Sales Order", filters=c, pluck="customer")
+	# work orders people add later (by hand, or for CRM orders) don't count against the demo
+	demo_orders = frappe.get_all("Sales Order", filters={**c, "po_no": ["like", f"{MARKER}%"]}, pluck="name")
+	planned = frappe.get_all(
+		"Work Order", filters={**c, "production_plan": ["is", "set"], "sales_order": ["in", demo_orders or [""]]}, pluck="sales_order"
+	)
 	completed = frappe.get_all(
 		"Work Order", filters={**c, "status": "Completed"}, fields=["planned_end_date", "actual_end_date"]
 	)
@@ -31,9 +37,8 @@ def check():
 		"late work orders >= 3": len(late) >= 3,
 		"open overdue work orders >= 2": open_overdue >= 2,
 		"production plans >= 12": frappe.db.count("Production Plan", c) >= 12,
-		"every work order comes from a production plan": not frappe.db.count(
-			"Work Order", {**c, "production_plan": ["is", "not set"]}
-		),
+		"every demo order has a work order from its production plan": bool(demo_orders)
+		and set(demo_orders) <= set(planned),
 		"MRP material requests >= 2": len(
 			set(frappe.get_all("Material Request Item", filters={"docstatus": 1, "production_plan": ["is", "set"]}, pluck="parent"))
 		)

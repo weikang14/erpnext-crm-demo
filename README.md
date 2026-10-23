@@ -426,11 +426,11 @@ one SST row, created by the CRM Integration user.
 ## Demo video click path
 
 1. **Ombak Factory** workspace: the 3 number cards and the report shortcuts.
-2. **Sales Order** → open one from early in the month → **Connections**: production plan, work order, delivery note, invoice.
+2. **Sales Order** → open one from early in the month → **Connections**: work order, delivery note, invoice (the production plan is linked from the work order).
 3. **Production Plan** for an order of *Pallet Rack Upright 3m*: MRP found no GI 2.0 mm sheet in stock and raised a **material request** → **purchase order** → **purchase receipt** with an **incoming inspection**.
 4. **Work Order** → its 4 **job cards**: time logs per operation, all in sequence.
 5. **Defect Log** → new → pick a job card → try a qty larger than was produced → the error.
-6. **Reports**: On-Time Rate (find a late order and its rejected inspection), Workstation Load for next week (Welding Bay is the busiest), Operation Time Variance, Defect Pareto.
+6. **Reports**: On-Time Rate from the demo's first day (find a late order and its rejected inspection), Workstation Load for the week after the demo was generated (Welding Bay is the busiest), Operation Time Variance, Defect Pareto.
 7. **Delivery Trip**: driver, lorry, stops.
 8. Log in as the production manager → **bell** → overdue alert → filtered list.
 9. **Terminal** (http://localhost:8081, `rajesh`): Laser Cutting → **Start** a Ready card → timer → **Pause** → **Resume** → **Complete** with one defect line → the card leaves the queue.
@@ -775,11 +775,11 @@ bash scripts/test-erp.sh                # 17 个合约测试，跑在独立的 c
 ### 演示视频操作路线
 
 1. **Ombak Factory** 工作台：3 张数字卡片和报表快捷方式。
-2. **Sales Order** → 打开一张月初的订单 → **Connections**：生产计划、工单、出货单、发票。
+2. **Sales Order** → 打开一张月初的订单 → **Connections**：工单、出货单、发票（生产计划从工单打开）。
 3. 一张 *Pallet Rack Upright 3m* 订单的 **Production Plan**：MRP 发现 GI 2.0 mm 钢板没有库存，自动建了**请购单** → **采购订单** → 带**进料检验**的**采购收货**。
 4. **Work Order** → 它的 4 张**工序卡**：每道工序的工时记录，按顺序完成。
 5. **Defect Log** → 新建 → 选一张工序卡 → 输入比已生产数量还多的数量 → 出现错误提示。
-6. **报表**：准时率（找一张延迟的订单和它不合格的检验）、下周的工作站负荷（焊接区最忙）、工时差异、不良 Pareto。
+6. **报表**：准时率（From Date 设为演示数据的第一天，找一张延迟的订单和它不合格的检验）、演示数据生成后那一周的工作站负荷（焊接区最忙）、工时差异、不良 Pareto。
 7. **Delivery Trip**：司机、货车、停靠点。
 8. 用生产主管的账号登录 → **铃铛** → 逾期提醒 → 筛选好的工单列表。
 9. **平板页**（http://localhost:8081，`rajesh`）：激光切割 → 对一张 Ready 的工序卡按 **Start** → 计时 → **Pause** → **Resume** → 填一行不良后 **Complete** → 这张工序卡离开队列。
